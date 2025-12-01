@@ -41,7 +41,7 @@ p <- ggplot() +
       "Wind"  = "lightblue2",
       "Both"  = "green4"
     ),
-    name = "Site Type"
+    name = "Type"
   ) +
   geom_text_repel(
     data = sites,

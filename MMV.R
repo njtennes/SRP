@@ -14,7 +14,7 @@ site_files <- c(
 )
 
 #setting the nameplate capacity 
-nameplate_kW <- 75000  
+nameplate_kW <- 75215.82
 
 #choosing a risk parameter, gamma, to identify weight
 gamma0       <- 1
