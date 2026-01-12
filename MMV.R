@@ -4,14 +4,26 @@ library(tidyr)
 library(purrr)
 library(CVXR)
 
+#NSRDB SITE FILES
 site_files <- c(
-  "/Users/nicktennes/Desktop/Solar/CasaGrande.csv",
-  "/Users/nicktennes/Desktop/Solar/CGJunction.csv",
-  "/Users/nicktennes/Desktop/Solar/Deming.csv",
-  "/Users/nicktennes/Desktop/Solar/Kingman.csv",
-  "/Users/nicktennes/Desktop/Solar/StJohns.csv",
-  "/Users/nicktennes/Desktop/Solar/Wilcox.csv"
+  "/Users/nicktennes/Desktop/NSRDB Solar Output/CasaGrande.csv",
+  "/Users/nicktennes/Desktop/NSRDB Solar Output/CGJunction.csv",
+  "/Users/nicktennes/Desktop/NSRDB Solar Output/Deming.csv",
+  "/Users/nicktennes/Desktop/NSRDB Solar Output/Kingman.csv",
+  "/Users/nicktennes/Desktop/NSRDB Solar Output/StJohns.csv",
+  "/Users/nicktennes/Desktop/NSRDB Solar Output/Wilcox.csv"
 )
+
+#ERA5 SITE FILES
+site_files <- c(
+  '/Users/nicktennes/Documents/SAM ERA5 Output 8760/Casa Grande Solar.csv',
+  '/Users/nicktennes/Documents/SAM ERA5 Output 8760/Deming Solar.csv',
+  '/Users/nicktennes/Documents/SAM ERA5 Output 8760/GC Junction Solar.csv',
+  '/Users/nicktennes/Documents/SAM ERA5 Output 8760/Kingman Solar.csv',
+  '/Users/nicktennes/Documents/SAM ERA5 Output 8760/St Johns Solar.csv',
+  '/Users/nicktennes/Documents/SAM ERA5 Output 8760/Wilcox Solar.csv'
+)
+
 
 #setting the nameplate capacity 
 nameplate_kW <- 75215.82
@@ -97,6 +109,16 @@ meta <- meta %>%
 mu    <- colMeans(X)
 Sigma <- stats::cov(X, use = "pairwise.complete.obs")
 
+summary <- tibble(
+  Site     = sites,
+  Mean_CF  = mu,                      
+  Variance = apply(X, 2, var)
+) |> arrange(desc(Mean_CF))
+
+con <- pipe("pbcopy", "w")
+write.table(summary, con, sep = "\t", col.names = NA)
+close(con)
+
 solve_markowitz <- function(mu, Sigma, gamma = gamma0, lb = NULL, ub = NULL, solver = "OSQP") {
   n <- length(mu)
   w <- CVXR::Variable(n)
@@ -137,11 +159,16 @@ frontier <- tibble(
 cat("\n--- Efficient frontier (head) ---\n")
 print(head(frontier, 10))
 
-#baby plot
-plot(frontier$variance, frontier$exp_CF, pch = 20,
-     xlab = "Variance of CF", ylab = "Expected CF",
-     main = "Efficient Frontier")
-grid()
+
+summary <- tibble(
+  Site     = sites,
+  Mean_CF  = mu,                      
+  Variance = apply(X, 2, var)
+) |> arrange(desc(Mean_CF))
+
+con <- pipe("pbcopy", "w")
+write.table(summary, con, sep = "\t", col.names = NA)
+close(con)
 
 #ggplot frontier
 library(ggrepel)
@@ -166,15 +193,7 @@ ggplot() +
   ) +
   theme_minimal(base_size = 12)
 
-summary <- tibble(
-  Site     = sites,
-  Mean_CF  = mu,                      
-  Variance = apply(X, 2, var)
-) |> arrange(desc(Mean_CF))
 
-con <- pipe("pbcopy", "w")
-write.table(summary, con, sep = "\t", col.names = NA)
-close(con)
 
 cor_X <- cor(X, use = "pairwise.complete.obs")
 print(round(cor_X, 3))
