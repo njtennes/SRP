@@ -63,7 +63,6 @@ nameplate_vec <- setNames(site_meta$nameplate_kW, site_meta$sitename)
 # CF Panel
 # ============================================
 read_site_long_cf <- function(path, sitename, nameplate_vec) {
-  # look up this site's nameplate
   np <- nameplate_vec[[sitename]]
   if (is.null(np) || is.na(np)) {
     stop(sprintf("No nameplate_kW found for site '%s'", sitename))
@@ -377,6 +376,12 @@ print(
 cat(sprintf("status=%s | γ=%g | E[CF]_rel=%.4f | Var_rel=%.4f | n_hours=%d\n",
             sol_rel$status, sol_rel$gamma, sol_rel$exp_CF, sol_rel$variance, nrow(X_rel)))
 
+fronttable_rel <- tibble(Site = sites, Weight = round(sol_rel$w, 4))
+
+con <- pipe("pbcopy", "w")
+write.table(fronttable_rel, con, sep = "\t", col.names = NA)
+close(con)
+
 # Frontier for reliability hours
 front_rel <- lapply(gamma_grid, function(g) solve_markowitz(mu_rel, Sigma_rel, gamma = g))
 
@@ -390,7 +395,7 @@ frontier_rel <- tibble(
   dplyr::arrange(variance)
 
 cat("\n=== Reliability hours: Efficient frontier (head) ===\n")
-print(head(frontier_rel, 8))
+print(head(frontier_rel, 20))
 
 plot(frontier_rel$variance, frontier_rel$exp_CF, pch = 16,
      xlab = "Variance of CF (reliability hours)", ylab = "Expected CF (reliability hours)",

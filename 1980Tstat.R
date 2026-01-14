@@ -1,6 +1,6 @@
 library(tidyverse)
 
-data_dir <- "/Users/nicktennes/Desktop/GCJ"
+data_dir <- "/Users/nicktennes/Desktop/CasaGrande"
 files <- list.files(data_dir, pattern = "\\.csv$", full.names = TRUE)
 
 read_weather_year <- function(f) {
@@ -75,3 +75,4 @@ T_table <- bind_rows(
 ) %>%
   select(variable, estimate, statistic, p.value, conf.low, conf.high)
 
+plot(x= yearly_means$year, y= yearly_means$mean_Tdry)
