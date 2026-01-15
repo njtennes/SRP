@@ -211,11 +211,12 @@ solve_markowitz <- function(mu, Sigma, gamma = gamma0, lb = NULL, ub = NULL, sol
   w <- CVXR::Variable(n)
   obj <- t(mu) %*% w - gamma * CVXR::quad_form(w, Sigma)
   cons <- list(w >= 0, sum(w) == 1)
-  # if (!is.null(lb)) cons <- c(cons, list(w >= lb))
-  # if (!is.null(ub)) cons <- c(cons, list(w <= ub))
   
   prob <- CVXR::Problem(CVXR::Maximize(obj), cons)
   res  <- CVXR::solve(prob, solver = solver)
+  #im telling CVXR To maximize my objective function (obj) 
+  #subject to consraints (cons)
+  #res = solver executes optimization
   
   wv <- as.numeric(res$getValue(w))
   list(
