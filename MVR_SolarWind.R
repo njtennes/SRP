@@ -26,14 +26,14 @@ site_files <- c(
 # ============================================
 # gamma (1st one for single optimization)
 # ============================================
-gamma0     <- 3.5
+gamma0     <- 2
 gamma_grid <- 10^seq(-10, 3, length.out = 50)
 
 # ============================================
 # Nameplate capacities
 # ============================================
-nameplate_solar_kW <- 77347
-nameplate_wind_kW  <- 60080.2
+nameplate_solar_kW <- 100000
+nameplate_wind_kW  <- 100000
 
 # ============================================
 # Site metadata: name, solar or wind, nameplate capacity
@@ -81,8 +81,8 @@ read_site_long_cf <- function(path, sitename, nameplate_vec) {
     dplyr::mutate(
       Year      = as.integer(Year),
       Site      = sitename,
-      Output_kW = dplyr::if_else(Output_kW < 0, 0, Output_kW),
-      CF        = Output_kW / np   # <-- site-specific nameplate
+      Output_kW = Output_kW,
+      CF        = Output_kW / np   
     ) |>
     dplyr::select(Year, Hour, Site, CF)
   

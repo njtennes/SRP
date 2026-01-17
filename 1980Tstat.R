@@ -75,4 +75,29 @@ T_table <- bind_rows(
 ) %>%
   select(variable, estimate, statistic, p.value, conf.low, conf.high)
 
+#plot
 plot(x= yearly_means$year, y= yearly_means$mean_DNI)
+
+#pretty plot
+
+library(ggplot2)
+
+ggplot(yearly_means, aes(x = year, y = mean_DNI)) +
+  geom_point(size = 2, alpha = 0.8) +
+  geom_smooth(
+    method = "lm",
+    formula = y ~ poly(x - 1980, 2, raw = TRUE),
+    se = TRUE,
+    linewidth = 1.2
+  ) +
+  geom_vline(xintercept = 1988, linetype = "dashed", linewidth = 0.8) +
+  labs(
+    title = "Grand Canyon Junction DNI, 1950–2023",
+    x = "Year",
+    y = "Annual Mean DNI" +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    panel.grid.minor = element_blank()
+  ))
+ 

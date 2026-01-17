@@ -6,7 +6,7 @@ library(purrr)
 #------------------------------------------------------------
 # 1) Set folders
 #------------------------------------------------------------
-infolder  <- '/Users/nicktennes/Desktop/ERA5 Dirty Solar'   # dirty files
+infolder  <- '/Users/nicktennes/Documents/SAM ERA5 Output 8760 dirty/Solar'   # dirty files
 outfolder <- '/Users/nicktennes/Documents/SAM ERA5 Output 8760'   # cleaned files
 
 dir.create(outfolder, showWarnings = FALSE)
@@ -76,3 +76,4 @@ walk(files, function(f) {
   outfile <- file.path(outfolder, basename(f))
   write_csv(data_clean, outfile)
 })
+
