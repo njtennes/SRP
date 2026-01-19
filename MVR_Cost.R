@@ -82,16 +82,16 @@ sites <- bx$sites
 meta  <- bx$meta
 
 cost_per_MWh <- c(
-  "Medicine Bow Wind" = 32,
-  "Encino Wind"       = 40,
-  "Silver City Wind"  = 40,
-  "GC Junction Wind"  = 38,
-  "Kingman Solar"     = 28,
-  "GC Junction Solar" = 30,
+  "Medicine Bow Wind" = 60,
+  "Encino Wind"       = 52.5,
+  "Silver City Wind"  = 52.5,
+  "GC Junction Wind"  = 51,
+  "Kingman Solar"     = 29,
+  "GC Junction Solar" = 29,
   "Casa Grande Solar" = 29,
-  "Wilcox Solar"      = 27,
-  "St Johns Solar"    = 31,
-  "Deming Solar"      = 33
+  "Wilcox Solar"      = 29,
+  "St Johns Solar"    = 29,
+  "Deming Solar"      = 29
 )
 cost_per_MWh <- cost_per_MWh[sites]
 # ============================================
@@ -138,6 +138,7 @@ summary <- tibble(
   Site     = sites,
   Mean_dollar = mu,
   Variance = apply(X_MW, 2, var),
+  Variance_cost = apply(X_econ, 2, var),
   Mean_output = mu_output
 ) |>
   dplyr::arrange(dplyr::desc(Mean_dollar))
@@ -212,12 +213,12 @@ print(
   tibble(Site = sites, Weight = round(sol0$w, 4)) |>
     dplyr::arrange(dplyr::desc(Weight))
 )
-cat(sprintf("γ=%g | E[CF]=%.4f | Var=%.4f\n", sol0$gamma, sol0$exp_CF, sol0$variance))
+cat(sprintf("γ=%g | E[MWh/$]=%.4f | Var=%.4f\n", sol0$gamma, sol0$exp_output, sol0$variance))
 
-fronttable <- tibble(Site = sites, Weight = round(sol0$w, 4))
+weights_table <- tibble(Site = sites, Weight = round(sol0$w, 4))
 
 con <- pipe("pbcopy", "w")
-write.table(fronttable, con, sep = "\t", col.names = NA)
+write.table(weights_table, con, sep = "\t", col.names = NA)
 close(con)
 
 # ============================================
@@ -236,16 +237,29 @@ cat("\n--- Efficient frontier (full year, head) ---\n")
 print(head(frontier, 20))
 
 # ggplot frontier + single-site points
+frontier_labeled <- frontier %>%
+  mutate(label_gamma = if_else(row_number() %% 5 == 0,
+                               paste0("γ=", round(gamma, 2)),
+                               NA_character_))
+
 ggplot() +
   geom_line(data = frontier, aes(x = variance, y = exp_mwhdollar),
             linewidth = 0.7, color = "darkblue") +
   geom_point(data = frontier, aes(x = variance, y = exp_mwhdollar),
              size = 1.5, color = "darkblue", alpha = 0.7) +
-  geom_point(data = summary, aes(x = Variance, y = Mean_dollar),
+  geom_point(data = summary, aes(x = Variance_cost, y = Mean_dollar),
              color = "red", size = 2) +
   geom_text_repel(
+    data = frontier_labeled,
+    aes(x = variance, y = exp_mwhdollar, label = label_gamma),
+    size = 3,
+    color = "darkblue",
+    na.rm = TRUE,
+    max.overlaps = Inf
+  ) +
+  geom_text_repel(
     data = summary,
-    aes(x = Variance, y = Mean_dollar, label = Site),
+    aes(x = Variance_cost, y = Mean_dollar, label = Site),
     size = 3,
     color = "red"
   ) +
