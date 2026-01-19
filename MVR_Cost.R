@@ -147,6 +147,23 @@ con <- pipe("pbcopy", "w")
 write.table(summary, con, sep = "\t", col.names = NA)
 close(con)
 
+summary_table <- as.data.frame(X) |>
+  pivot_longer(
+    cols = everything(),
+    names_to = "Site",
+    values_to = "Output"
+  ) |>
+  group_by(Site) |>
+  summarise(
+    Mean = mean(Output, na.rm = TRUE),
+    StDev = sd(Output, na.rm = TRUE),
+    Min = min(Output, na.rm = TRUE),
+    Max = max(Output, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+summary_table
+
 # ============================================
 # Correlation matrices
 # ============================================
