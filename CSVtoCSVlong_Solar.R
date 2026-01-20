@@ -14,6 +14,7 @@ out_dir <- '/Users/nicktennes/Documents/ERA5 Weather Files CLEAN'
 # Parse filename: site + year
 # Example:
 # Solar_CasaGrande_1992_correctedDNI_30minuteshift_final.csv
+# Solar_sitename_yyyy must be included
 # --------------------------------
 parse_solar_name <- function(path) {
   fn <- basename(path)

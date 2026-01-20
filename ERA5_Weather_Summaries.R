@@ -56,3 +56,56 @@ wind_mean_of_yearly_means <- wind_yearly_means %>%
     .groups = "drop"
   ) %>%
   arrange(site)
+
+SOLAR <- read.csv('/Users/nicktennes/Documents/ERA5 Weather Files CLEAN/ALLSITES_solar.csv')
+
+SOLAR <- SOLAR %>%
+  filter(year >= 1988)
+
+solar_daylight <- SOLAR %>%
+  filter(!between(hour, 9, 5) )
+
+solar_hour_summary <- SOLAR %>%
+  group_by(hour) %>%
+  summarise(
+    n_obs = n(),
+    
+    ghi_mean = mean(ghi, na.rm = TRUE),
+    dni_mean = mean(dni, na.rm = TRUE),
+    dhi_mean = mean(dhi)
+  
+  ) %>%
+  arrange(hour)
+
+solar_site_summary <- SOLAR %>%
+  group_by(site) %>%
+  summarise(
+    n_obs = n(),
+    
+    ghi_mean = mean(ghi, na.rm = TRUE),
+    dni_mean = mean(dni, na.rm = TRUE),
+    dhi_mean = mean(dhi)
+  ) %>%
+  arrange(site)
+
+solar_site_summary <- SOLAR %>%
+  group_by(site) %>%
+  summarise(
+    n_obs = n(),
+    
+    ghi_mean = mean(ghi, na.rm = TRUE),
+    ghi_var = var(ghi)
+  ) %>%
+  arrange(site)
+
+solar_site_summary_daylight <- solar_daylight %>%
+  group_by(site) %>%
+  summarise(
+    n_obs = n(),
+    
+    ghi_mean = mean(ghi, na.rm = TRUE),
+    ghi_sd = sd(ghi),
+    max_ghi = max(ghi),
+    min_ghi = min(ghi),
+  ) %>%
+  arrange(site)
