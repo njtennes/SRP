@@ -81,6 +81,8 @@ X     <- bx$X
 sites <- bx$sites
 meta  <- bx$meta
 
+#write.csv(X, file = "/Users/nicktennes/Desktop/FullOutputMatrix.csv", row.names = FALSE)
+
 cost_per_MWh <- c(
   "Medicine Bow Wind" = 60,
   "Encino Wind"       = 52.5,
@@ -170,6 +172,10 @@ summary_table
 cor_X <- cor(X, use = "pairwise.complete.obs")
 print(round(cor_X, 3))
 
+con <- pipe("pbcopy", "w")
+write.table(round(cor_X, 3), con, sep = "\t", col.names = NA)
+close(con)
+
 WindSolar <- X[, c("Medicine Bow Wind", "Encino Wind", "Silver City Wind", 
                    "GC Junction Wind", "Kingman Solar","GC Junction Solar",
                    "Casa Grande Solar", "Wilcox Solar", "St Johns Solar", 
@@ -179,24 +185,20 @@ cor_WindSolar <- cor(WindSolar, use = "pairwise.complete.obs")
 round(cor_WindSolar, 3)
 
 con <- pipe("pbcopy", "w")
-write.table(round(cor_X, 3), con, sep = "\t", col.names = NA)
-close(con)
-
-wind_only <- X[, c("Encino Wind", "Medicine Bow Wind", "Silver City Wind", "GC Junction Wind")]
-cor_wind <- cor(wind_only, use = "pairwise.complete.obs")
-round(cor_wind, 3)
-
-GCJ_only <- X[, c("GC Junction Solar", "GC Junction Wind")]
-cor_GCJ <- cor(GCJ_only, use = "pairwise.complete.obs")
-round(cor_GCJ, 3)
-
-WindSolar <- X[, c("Medicine Bow Wind", "Encino Wind", "Wilcox Solar", "Kingman Solar")]
-cor_WindSolar <- cor(WindSolar, use = "pairwise.complete.obs")
-round(cor_WindSolar, 3)
-
-con <- pipe("pbcopy", "w")
 write.table(round(cor_WindSolar, 3), con, sep = "\t", col.names = NA)
 close(con)
+
+#wind_only <- X[, c("Encino Wind", "Medicine Bow Wind", "Silver City Wind", "GC Junction Wind")]
+#cor_wind <- cor(wind_only, use = "pairwise.complete.obs")
+#round(cor_wind, 3)
+
+#GCJ_only <- X[, c("GC Junction Solar", "GC Junction Wind")]
+#cor_GCJ <- cor(GCJ_only, use = "pairwise.complete.obs")
+#round(cor_GCJ, 3)
+
+#WindSolar <- X[, c("Medicine Bow Wind", "Encino Wind", "Wilcox Solar", "Kingman Solar")]
+#cor_WindSolar <- cor(WindSolar, use = "pairwise.complete.obs")
+#round(cor_WindSolar, 3)
 
 # ============================================
 # Markowitz solver
