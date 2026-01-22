@@ -1,3 +1,5 @@
+library(dplyr)
+
 WIND <- read.csv('/Users/nicktennes/Documents/ERA5 Weather Files CLEAN/ALLSITES_wind.csv')
 
 WIND <- WIND %>%
@@ -94,7 +96,7 @@ solar_site_summary <- SOLAR %>%
     n_obs = n(),
     
     ghi_mean = mean(ghi, na.rm = TRUE),
-    ghi_var = var(ghi)
+    ghi_sd = sd(ghi)
   ) %>%
   arrange(site)
 
