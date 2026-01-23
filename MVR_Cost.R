@@ -283,8 +283,8 @@ ggplot() +
     color = "red"
   ) +
   labs(
-    x = "Variance MWHr/$ spent",
-    y = "Expected MWHr/$ spent", 
+    x = "Variance MWHr^2/$ spent",
+    y = "Expected MWHr^2/$ spent", 
     title = "Efficient Frontier with Single-Site Portfolios"
   ) +
   theme_minimal(base_size = 12)
