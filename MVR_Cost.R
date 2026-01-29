@@ -9,6 +9,8 @@ library(stringr)
 library(ggplot2)
 library(ggrepel)
 library(CVXR)
+library(kableExtra)
+
 #=================================
 
 site_files <- c(
@@ -144,6 +146,17 @@ summary <- tibble(
   Mean_output = mu_output
 ) |>
   dplyr::arrange(dplyr::desc(Mean_dollar))
+
+kable(
+  summary,
+  format = "latex",
+  booktabs = TRUE,
+  caption = "Summary statistics for candidate renewable sites",
+  digits = 2
+) %>%
+  kable_styling(
+    latex_options = c("hold_position", "scale_down")
+  )
 
 con <- pipe("pbcopy", "w")
 write.table(summary, con, sep = "\t", col.names = NA)
