@@ -28,7 +28,7 @@ site_files <- c(
 # ============================================
 # gamma (1st one for single optimization)
 # ============================================
-gamma0     <- .3
+gamma0     <- 1.5
 gamma_grid <- 10^seq(-10, 3, length.out = 50)
 
 site_names <- basename(site_files) |> tools::file_path_sans_ext()
@@ -140,12 +140,11 @@ mu_output <- colMeans(X_MW)
 # ============================================
 summary <- tibble(
   Site     = sites,
-  Mean_dollar = mu,
-  Variance = apply(X_MW, 2, var),
-  Variance_cost = apply(X_econ, 2, var),
+  Weighted_Output = mu,
+  Weighted_Var = apply(X_econ, 2, var),
   Mean_output = mu_output
 ) |>
-  dplyr::arrange(dplyr::desc(Mean_dollar))
+  dplyr::arrange(dplyr::desc(Weighted_Output))
 
 kable(
   summary,
@@ -279,7 +278,7 @@ ggplot() +
             linewidth = 0.7, color = "darkblue") +
   geom_point(data = frontier, aes(x = variance, y = exp_mwhdollar),
              size = 1.5, color = "darkblue", alpha = 0.7) +
-  geom_point(data = summary, aes(x = Variance_cost, y = Mean_dollar),
+  geom_point(data = summary, aes(x = Weighted_Var, y = Weighted_Output),
              color = "red", size = 2) +
   geom_text_repel(
     data = frontier_labeled,
@@ -291,14 +290,14 @@ ggplot() +
   ) +
   geom_text_repel(
     data = summary,
-    aes(x = Variance_cost, y = Mean_dollar, label = Site),
+    aes(x = Weighted_Var, y = Weighted_Output, label = Site),
     size = 3,
     color = "red"
   ) +
   labs(
     x = "Variance MWHr^2/$ spent",
     y = "Expected MWHr^2/$ spent", 
-    title = "Efficient Frontier with Single-Site Portfolios"
+    title = "Cost Weighted Efficient Frontier"
   ) +
   theme_minimal(base_size = 12)
 

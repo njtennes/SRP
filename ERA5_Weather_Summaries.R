@@ -94,9 +94,11 @@ solar_site_summary <- SOLAR %>%
   group_by(site) %>%
   summarise(
     n_obs = n(),
-    
+    temp_avg = mean(tdry),
     ghi_mean = mean(ghi, na.rm = TRUE),
-    ghi_sd = sd(ghi)
+    ghi_sd = sd(ghi),
+    ghi_max = max(ghi),
+    ghi_min = min(ghi)
   ) %>%
   arrange(site)
 
