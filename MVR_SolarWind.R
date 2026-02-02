@@ -416,3 +416,98 @@ print(site_stats_rel)
 
 cor_X_rel <- cor(X_rel, use = "pairwise.complete.obs")
 print(round(cor_X_rel, 3))
+
+
+#######
+#Daily Aggregates
+#######
+
+# ============================================
+# Hourly -> Daily aggregation (daily mean CF)
+# ============================================
+
+# Day number within each Year (1..365) already exists as meta$DayOfYear.
+# Create a unique day ID across the whole sample:
+meta <- meta %>%
+  mutate(DayID = paste0(Year, "-", sprintf("%03d", DayOfYear)))
+
+# Aggregate hourly CF to daily mean for each site
+# X is [n_hours x n_sites]
+X_day <- apply(X, 2, function(v) tapply(v, meta$DayID, mean, na.rm = TRUE))
+X_day <- do.call(cbind, X_day)
+colnames(X_day) <- sites
+rownames(X_day) <- sort(unique(meta$DayID))  # matches tapply ordering (usually)
+
+# Build daily metadata aligned to rows of X_day
+meta_day <- meta %>%
+  distinct(DayID, Year, DayOfYear, Month) %>%
+  arrange(DayID)
+
+# ============
+# Mean & covariance
+# ============
+mu_day    <- colMeans(X_day, na.rm = TRUE)
+Sigma_day <- stats::cov(X_day, use = "pairwise.complete.obs")
+
+# Single-γ daily solution
+sol0_day <- solve_markowitz(mu_day, Sigma_day, gamma = gamma0)
+
+cat("\n--- Single-γ DAILY solution ---\n")
+print(
+  tibble(Site = sites, Weight = round(sol0_day$w, 4)) |>
+    dplyr::arrange(dplyr::desc(Weight))
+)
+cat(sprintf("γ=%g | E[CF]_day=%.4f | Var_day=%.6f\n",
+            sol0_day$gamma, sol0_day$exp_CF, sol0_day$variance))
+
+# Efficient frontier (daily)
+front_day <- lapply(gamma_grid, function(g) solve_markowitz(mu_day, Sigma_day, gamma = g))
+
+frontier_day <- tibble(
+  gamma    = sapply(front_day, `[[`, "gamma"),
+  exp_CF   = sapply(front_day, `[[`, "exp_CF"),
+  variance = sapply(front_day, `[[`, "variance"),
+  status   = sapply(front_day, `[[`, "status")
+) |>
+  dplyr::filter(status == "optimal") |>
+  dplyr::arrange(variance)
+
+cat("\n--- Efficient frontier (DAILY, head) ---\n")
+print(head(frontier_day, 20))
+
+# Add labels to your already-computed hourly frontier
+frontier_hour <- frontier %>% mutate(freq = "Hourly")
+frontier_day2  <- frontier_day %>% select(gamma, exp_CF, variance) %>% mutate(freq = "Daily mean")
+
+front_compare <- bind_rows(frontier_hour, frontier_day2)
+
+ggplot(front_compare, aes(x = variance, y = exp_CF, color = freq)) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 1.2, alpha = 0.6) +
+  labs(
+    x = "Variance of CF",
+    y = "Expected CF",
+    title = "Efficient Frontier Comparison: Hourly vs Daily-Average CF"
+  ) +
+  theme_minimal(base_size = 12)
+
+# Combine weights side-by-side
+w_compare <- tibble(
+  Site   = sites,
+  Hourly = sol0$w,
+  Daily  = sol0_day$w,
+  Diff   = sol0_day$w - sol0$w
+) |>
+  mutate(across(c(Hourly, Daily, Diff), ~round(.x, 4))) |>
+  arrange(desc(abs(Diff)))
+
+cat("\n--- Weight comparison at gamma0 ---\n")
+print(w_compare)
+
+# Compare objective components at gamma0
+metrics_compare <- tibble(
+  freq     = c("Hourly", "Daily mean"),
+  exp_CF   = c(sol0$exp_CF, sol0_day$exp_CF),
+  variance = c(sol0$variance, sol0_day$variance)
+)
+print(metrics_compare)
