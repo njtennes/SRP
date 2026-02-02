@@ -434,7 +434,6 @@ meta <- meta %>%
 # Aggregate hourly CF to daily mean for each site
 # X is [n_hours x n_sites]
 X_day <- apply(X, 2, function(v) tapply(v, meta$DayID, mean, na.rm = TRUE))
-X_day <- do.call(cbind, X_day)
 colnames(X_day) <- sites
 rownames(X_day) <- sort(unique(meta$DayID))  # matches tapply ordering (usually)
 
