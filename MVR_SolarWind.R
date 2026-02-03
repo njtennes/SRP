@@ -169,6 +169,40 @@ write.table(summary, con, sep = "\t", col.names = NA)
 close(con)
 
 # ============================================
+#Site x Seasonal Summary Table
+# ============================================
+m <- meta$Month
+
+season_vec <- dplyr::case_when(
+  m %in% c(12, 1, 2) ~ "Winter",
+  m %in% c(3, 4, 5)  ~ "Spring",
+  m %in% c(6, 7, 8)  ~ "Summer",
+  m %in% c(9,10,11)  ~ "Fall",
+  TRUE               ~ NA_character_
+)
+
+summary_seasonal <- as_tibble(X) |>
+  mutate(Season = season_vec) |>
+  pivot_longer(
+    cols = -Season,
+    names_to  = "Site",
+    values_to = "CF"
+  ) |>
+  group_by(Season, Site) |>
+  summarise(
+    Mean_CF  = mean(CF, na.rm = TRUE),
+    Variance = var(CF,  na.rm = TRUE),
+    .groups  = "drop"
+  ) |>
+  arrange(Season, desc(Mean_CF))
+
+summary_seasonal
+
+con <- pipe("pbcopy", "w")
+write.table(summary, con, sep = "\t", col.names = NA)
+close(con)
+
+# ============================================
 # Correlation matrices
 # ============================================
 cor_X <- cor(X, use = "pairwise.complete.obs")
@@ -354,11 +388,11 @@ close(con)
 
 idx_rel <- which(
   # Summer late afternoon peak: May–Sep, 3–7pm
-  (meta$Month %in% 5:9  & meta$HourOfDay %in% 15:19) |
+  (meta$Month %in% 5:9  & meta$HourOfDay %in% 17:23) #|
     # Winter morning peak: Dec–Mar, 6–9am
-    (meta$Month %in% c(12, 1, 2, 3) & meta$HourOfDay %in% 6:9) |
+   # (meta$Month %in% c(12, 1, 2, 3) & meta$HourOfDay %in% 6:9) |
     # Winter evening peak: Dec–Mar, 6–9pm
-    (meta$Month %in% c(12, 1, 2, 3) & meta$HourOfDay %in% 18:21)
+   # (meta$Month %in% c(12, 1, 2, 3) & meta$HourOfDay %in% 18:21)
 )
 
 X_rel <- X[idx_rel, , drop = FALSE]
@@ -403,7 +437,7 @@ plot(frontier_rel$variance, frontier_rel$exp_CF, pch = 16,
      main = "Efficient Frontier — Reliability Hours")
 grid()
 
-# Reliability-hour site stats + correlation (optional, mirrors your JA section)
+# Reliability-hour site stats + correlation
 site_stats_rel <- tibble(
   Site     = sites,
   Mean_CF  = mu_rel,
@@ -423,7 +457,7 @@ print(round(cor_X_rel, 3))
 #######
 
 # ============================================
-# Hourly -> Daily aggregation (daily mean CF)
+#Daily aggregation (daily mean CF)
 # ============================================
 
 # Day number within each Year (1..365) already exists as meta$DayOfYear.
@@ -432,7 +466,6 @@ meta <- meta %>%
   mutate(DayID = paste0(Year, "-", sprintf("%03d", DayOfYear)))
 
 # Aggregate hourly CF to daily mean for each site
-# X is [n_hours x n_sites]
 X_day <- apply(X, 2, function(v) tapply(v, meta$DayID, mean, na.rm = TRUE))
 colnames(X_day) <- sites
 rownames(X_day) <- sort(unique(meta$DayID))  # matches tapply ordering (usually)
