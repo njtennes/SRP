@@ -383,7 +383,7 @@ close(con)
 
 ###### ============================================
 # Reliability-hour subset (custom windows)
-# May–Sep 3–7pm, Dec–Mar 6–9am and 6–9pm
+# Comment in and out as you please
 # ============================================
 
 idx_rel <- which(
@@ -395,8 +395,10 @@ idx_rel <- which(
    # (meta$Month %in% c(12, 1, 2, 3) & meta$HourOfDay %in% 18:21)
 )
 
+#generates the x matrix with the subsetted hours
 X_rel <- X[idx_rel, , drop = FALSE]
 
+# mean + variance
 mu_rel    <- colMeans(X_rel, na.rm = TRUE)
 Sigma_rel <- stats::cov(X_rel, use = "pairwise.complete.obs")
 
@@ -508,12 +510,12 @@ cat("\n--- Efficient frontier (DAILY, head) ---\n")
 print(head(frontier_day, 20))
 
 # Add labels to your already-computed hourly frontier
-frontier_hour <- frontier %>% mutate(freq = "Hourly")
-frontier_day2  <- frontier_day %>% select(gamma, exp_CF, variance) %>% mutate(freq = "Daily mean")
+frontier_hour <- frontier %>% mutate(Granularity = "Hourly")
+frontier_day2  <- frontier_day %>% select(gamma, exp_CF, variance) %>% mutate(Granularity = "Daily")
 
 front_compare <- bind_rows(frontier_hour, frontier_day2)
 
-ggplot(front_compare, aes(x = variance, y = exp_CF, color = freq)) +
+ggplot(front_compare, aes(x = variance, y = exp_CF, color = Granularity)) +
   geom_line(linewidth = 0.8) +
   geom_point(size = 1.2, alpha = 0.6) +
   labs(
