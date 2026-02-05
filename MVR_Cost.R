@@ -178,6 +178,144 @@ summary_table <- as.data.frame(X) |>
 
 summary_table
 
+m <- meta$Month
+
+season_vec <- dplyr::case_when(
+  m %in% c(12, 1, 2) ~ "Winter",
+  m %in% c(3, 4, 5)  ~ "Spring",
+  m %in% c(6, 7, 8)  ~ "Summer",
+  m %in% c(9,10,11)  ~ "Fall",
+  TRUE               ~ NA_character_
+)
+
+
+summary_monthly <- as_tibble(X) |>
+  mutate(Month = m) |>
+  pivot_longer(
+    cols = -Month,
+    names_to  = "Site",
+    values_to = "CF"
+  ) |>
+  group_by(Month, Site) |>
+  summarise(
+    Mean_CF  = mean(CF, na.rm = TRUE),
+    Variance = var(CF,  na.rm = TRUE),
+    .groups  = "drop"
+  ) |>
+  arrange(Month, desc(Mean_CF))
+
+summary_monthly
+
+summary_monthly <- summary_monthly |>
+  mutate(
+    tech = ifelse(
+      grepl("solar", Site, ignore.case = TRUE),
+      "Solar",
+      "Wind"
+    )
+  )
+
+summary_monthly <- summary_monthly %>%
+  mutate(Mean_CF = Mean_CF * 100)
+
+site_order <- summary_monthly |>
+  distinct(Site, tech) |>
+  arrange(tech, Site) |>
+  pull(Site)
+
+# Apply factor order
+summary_monthly <- summary_monthly |>
+  mutate(
+    Site = factor(Site, levels = site_order)
+  )
+
+summary_monthly <- summary_monthly |>
+  mutate(
+    tech = factor(tech, levels = c("Solar", "Wind"))
+  )
+# Get site lists by tech
+solar_sites <- summary_monthly |>
+  filter(tech == "Solar") |>
+  distinct(Site) |>
+  pull(Site)
+
+wind_sites <- summary_monthly |>
+  filter(tech == "Wind") |>
+  distinct(Site) |>
+  pull(Site)
+
+# Generate shades (base R, no extra packages)
+solar_colors <- colorRampPalette(c("#F4A6A6", "#8B0000"))(length(solar_sites))
+wind_colors  <- colorRampPalette(c("#A6C8FF", "#08306B"))(length(wind_sites))
+
+# Named vector for scale_color_manual()
+site_colors <- c(
+  setNames(solar_colors, solar_sites),
+  setNames(wind_colors,  wind_sites)
+)
+
+ggplot(summary_monthly,
+       aes(x = Month, y = Mean_CF, color = Site)) +
+  geom_point(size = 2.6, alpha = 0.9) +
+  scale_color_manual(values = site_colors) +
+  scale_x_continuous(
+    breaks = 1:12,
+    labels = month.abb
+  ) +
+  labs(
+    x = "Month",
+    y = "Expected Capacity Factor",
+    color = "Site"
+  ) +
+  theme_minimal(base_size = 12)
+
+ggplot(summary_monthly,
+       aes(x = Month, y = Mean_CF, color = tech)) +
+  geom_point(size = 2.4) +
+  scale_color_manual(
+    values = c("Solar" = "red", "Wind" = "blue")
+  ) +
+  scale_x_continuous(
+    breaks = 1:12,
+    labels = month.abb
+  ) +
+  labs(
+    x = "Month",
+    y = "Expected Capacity Factor (%)",
+    color = "Technology"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(legend.position = "bottom")
+
+h <- meta$HourOfDay
+
+hourly_tech <- as_tibble(X) |>
+  mutate(Hour = h) |>
+  pivot_longer(
+    cols = -Hour,
+    names_to  = "Site",
+    values_to = "CF"
+  ) |>
+  left_join(
+    site_meta |> select(sitename, tech),
+    by = c("Site" = "sitename")
+  ) |>
+  group_by(Hour, tech) |>
+  summarise(
+    Mean_CF = mean(CF, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  arrange(tech, Hour)
+
+hourly_tech <- hourly_tech %>%
+  mutate(Mean_CF = Mean_CF * 100)
+
+ggplot(hourly_tech, aes(x = Hour, y = Mean_CF, color = tech)) +
+  geom_line(size = 1, alpha = 1) +
+  scale_x_continuous(breaks = 0:23) +
+  scale_color_manual(values = c("Solar" = "#F4A6A6", "Wind" = "#08306B")) +
+  labs(x = "Hour of Day", y = "Expected Capacity Factor (%)", color = "Technology") +
+  theme_minimal(base_size = 12)
 # ============================================
 # Correlation matrices
 # ============================================
