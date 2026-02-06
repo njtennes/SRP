@@ -198,11 +198,12 @@ summary_monthly <- as_tibble(X) |>
   ) |>
   group_by(Month, Site) |>
   summarise(
-    Mean_CF  = mean(CF, na.rm = TRUE),
-    Variance = var(CF,  na.rm = TRUE),
-    .groups  = "drop"
-  ) |>
-  arrange(Month, desc(Mean_CF))
+    Mean_CF = mean(CF, na.rm = TRUE),
+    SD_CF   = sd(CF, na.rm = TRUE),
+    N       = sum(!is.na(CF)),
+    SE_CF   = SD_CF / sqrt(N),
+    .groups = "drop"
+  )
 
 summary_monthly
 
@@ -257,6 +258,12 @@ site_colors <- c(
 ggplot(summary_monthly,
        aes(x = Month, y = Mean_CF, color = Site)) +
   geom_point(size = 2.6, alpha = 0.9) +
+  geom_errorbar(
+    aes(ymin = Mean_CF - SE_CF,
+        ymax = Mean_CF + SE_CF),
+    width = 0.25,
+    alpha = 0.6
+  ) +
   scale_color_manual(values = site_colors) +
   scale_x_continuous(
     breaks = 1:12,
