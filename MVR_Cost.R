@@ -33,6 +33,17 @@ gamma_grid <- 10^seq(-10, 3, length.out = 50)
 
 site_names <- basename(site_files) |> tools::file_path_sans_ext()
 
+site_meta <- tibble(
+  file     = site_files,
+  sitename = site_names
+) %>%
+  mutate(
+    tech = case_when(
+      str_detect(sitename, regex("wind",  ignore_case = TRUE)) ~ "Wind",
+      str_detect(sitename, regex("solar", ignore_case = TRUE)) ~ "Solar",
+      TRUE ~ "Unknown"
+    ))
+
 read_site_long_output <- function(path, sitename) {
   
   df <- readr::read_csv(path, show_col_types = FALSE)
@@ -179,6 +190,7 @@ summary_table <- as.data.frame(X) |>
 summary_table
 
 m <- meta$Month
+y <- meta$Year
 
 season_vec <- dplyr::case_when(
   m %in% c(12, 1, 2) ~ "Winter",
@@ -188,20 +200,27 @@ season_vec <- dplyr::case_when(
   TRUE               ~ NA_character_
 )
 
-
 summary_monthly <- as_tibble(X) |>
-  mutate(Month = m) |>
+  mutate(
+    Month = m,
+    Year  = y  
+  ) |>
   pivot_longer(
-    cols = -Month,
+    cols = -c(Month, Year),
     names_to  = "Site",
     values_to = "CF"
   ) |>
+  group_by(Year, Month, Site) |>
+  summarise(
+    Yearly_Mean = (mean(CF, na.rm = TRUE) * 100),
+    .groups = "drop"
+  ) |>
   group_by(Month, Site) |>
   summarise(
-    Mean_CF = mean(CF, na.rm = TRUE),
-    SD_CF   = sd(CF, na.rm = TRUE),
-    N       = sum(!is.na(CF)),
-    SE_CF   = SD_CF / sqrt(N),
+    Mean_CF = mean(Yearly_Mean),
+    SD_CF   = sd(Yearly_Mean),
+    N_years = n(),
+    SE_CF   = SD_CF / sqrt(N_years),
     .groups = "drop"
   )
 
@@ -215,9 +234,6 @@ summary_monthly <- summary_monthly |>
       "Wind"
     )
   )
-
-summary_monthly <- summary_monthly %>%
-  mutate(Mean_CF = Mean_CF * 100)
 
 site_order <- summary_monthly |>
   distinct(Site, tech) |>
@@ -271,28 +287,10 @@ ggplot(summary_monthly,
   ) +
   labs(
     x = "Month",
-    y = "Expected Capacity Factor",
+    y = "Expected Capacity Factor (%)",
     color = "Site"
   ) +
   theme_minimal(base_size = 12)
-
-ggplot(summary_monthly,
-       aes(x = Month, y = Mean_CF, color = tech)) +
-  geom_point(size = 2.4) +
-  scale_color_manual(
-    values = c("Solar" = "red", "Wind" = "blue")
-  ) +
-  scale_x_continuous(
-    breaks = 1:12,
-    labels = month.abb
-  ) +
-  labs(
-    x = "Month",
-    y = "Expected Capacity Factor (%)",
-    color = "Technology"
-  ) +
-  theme_minimal(base_size = 11) +
-  theme(legend.position = "bottom")
 
 h <- meta$HourOfDay
 
@@ -310,6 +308,9 @@ hourly_tech <- as_tibble(X) |>
   group_by(Hour, tech) |>
   summarise(
     Mean_CF = mean(CF, na.rm = TRUE),
+    SD_CF   = sd(CF, na.rm = TRUE),
+    N       = sum(!is.na(CF)),
+    SE_CF   = SD_CF / sqrt(N),
     .groups = "drop"
   ) |>
   arrange(tech, Hour)
@@ -319,10 +320,17 @@ hourly_tech <- hourly_tech %>%
 
 ggplot(hourly_tech, aes(x = Hour, y = Mean_CF, color = tech)) +
   geom_line(size = 1, alpha = 1) +
+  geom_errorbar(
+    aes(ymin = Mean_CF - SE_CF,
+        ymax = Mean_CF + SE_CF),
+    width = 0.25,
+    alpha = 0.6
+  ) +
   scale_x_continuous(breaks = 0:23) +
   scale_color_manual(values = c("Solar" = "#F4A6A6", "Wind" = "#08306B")) +
   labs(x = "Hour of Day", y = "Expected Capacity Factor (%)", color = "Technology") +
   theme_minimal(base_size = 12)
+
 # ============================================
 # Correlation matrices
 # ============================================
@@ -453,17 +461,17 @@ ggplot() +
 
 idx_rel <- which(
   # Summer late afternoon peak: May–Sep, 3–7pm
-  (meta$Month %in% 5:9  & meta$HourOfDay %in% 15:19) |
+  (meta$Month %in% 6:8  & meta$HourOfDay %in% 16:20) #|
     # Winter morning peak: Dec–Mar, 6–9am
-    (meta$Month %in% c(12, 1, 2, 3) & meta$HourOfDay %in% 6:9) |
+   # (meta$Month %in% c(12, 1, 2, 3) & meta$HourOfDay %in% 6:9) |
     # Winter evening peak: Dec–Mar, 6–9pm
-    (meta$Month %in% c(12, 1, 2, 3) & meta$HourOfDay %in% 18:21)
+    #(meta$Month %in% c(12, 1, 2, 3) & meta$HourOfDay %in% 18:21)
 )
 
-X_rel <- X[idx_rel, , drop = FALSE]
+X_econ_rel <- X_econ[idx_rel, , drop = FALSE]
 
-mu_rel    <- colMeans(X_rel, na.rm = TRUE)
-Sigma_rel <- stats::cov(X_rel, use = "pairwise.complete.obs")
+mu_rel    <- colMeans(X_econ_rel, na.rm = TRUE)
+Sigma_rel <- stats::cov(X_econ_rel, use = "pairwise.complete.obs")
 
 # Single-γ solution for reliability hours
 sol_rel <- solve_markowitz(mu_rel, Sigma_rel, gamma = gamma0)
