@@ -224,8 +224,6 @@ summary_monthly <- as_tibble(X) |>
     .groups = "drop"
   )
 
-summary_monthly
-
 summary_monthly <- summary_monthly |>
   mutate(
     tech = ifelse(
@@ -327,7 +325,7 @@ ggplot(hourly_tech, aes(x = Hour, y = Mean_CF, color = tech)) +
     alpha = 0.6
   ) +
   scale_x_continuous(breaks = 0:23) +
-  scale_color_manual(values = c("Solar" = "#F4A6A6", "Wind" = "#08306B")) +
+  scale_color_manual(values = c("Solar" = "lightpink3", "Wind" = "#08306B")) +
   labs(x = "Hour of Day", y = "Expected Capacity Factor (%)", color = "Technology") +
   theme_minimal(base_size = 12)
 

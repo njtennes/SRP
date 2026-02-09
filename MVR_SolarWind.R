@@ -213,20 +213,20 @@ WindSolar <- X[, c("Medicine Bow Wind", "Encino Wind", "Silver City Wind",
                    "Casa Grande Solar", "Wilcox Solar", "St Johns Solar", 
                    "Deming Solar")]
 
-cor_WindSolar <- cor(WindSolar, use = "pairwise.complete.obs")
-round(cor_WindSolar, 3)
+#cor_WindSolar <- cor(WindSolar, use = "pairwise.complete.obs")
+#round(cor_WindSolar, 3)
 
-con <- pipe("pbcopy", "w")
-write.table(round(cor_X, 3), con, sep = "\t", col.names = NA)
-close(con)
+#con <- pipe("pbcopy", "w")
+#write.table(round(cor_X, 3), con, sep = "\t", col.names = NA)
+#close(con)
 
-wind_only <- X[, c("Encino Wind", "Medicine Bow Wind", "Silver City Wind", "GC Junction Wind")]
-cor_wind <- cor(wind_only, use = "pairwise.complete.obs")
-round(cor_wind, 3)
+#wind_only <- X[, c("Encino Wind", "Medicine Bow Wind", "Silver City Wind", "GC Junction Wind")]
+#cor_wind <- cor(wind_only, use = "pairwise.complete.obs")
+#round(cor_wind, 3)
 
-GCJ_only <- X[, c("GC Junction Solar", "GC Junction Wind")]
-cor_GCJ <- cor(GCJ_only, use = "pairwise.complete.obs")
-round(cor_GCJ, 3)
+#GCJ_only <- X[, c("GC Junction Solar", "GC Junction Wind")]
+#cor_GCJ <- cor(GCJ_only, use = "pairwise.complete.obs")
+#round(cor_GCJ, 3)
 
 WindSolar <- X[, c("Medicine Bow Wind", "Encino Wind", "Wilcox Solar", "Kingman Solar")]
 cor_WindSolar <- cor(WindSolar, use = "pairwise.complete.obs")
@@ -388,7 +388,7 @@ close(con)
 
 idx_rel <- which(
   # Summer late afternoon peak: May–Sep, 3–7pm
-  (meta$Month %in% 5:9  & meta$HourOfDay %in% 17:23) #|
+  (meta$Month %in% 6:9  & meta$HourOfDay %in% 16:21) #|
     # Winter morning peak: Dec–Mar, 6–9am
    # (meta$Month %in% c(12, 1, 2, 3) & meta$HourOfDay %in% 6:9) |
     # Winter evening peak: Dec–Mar, 6–9pm

@@ -87,17 +87,17 @@ ggplot(yearly_means, aes(x = year, y = mean_DNI)) +
   geom_smooth(
     method = "lm",
     formula = y ~ poly(x - 1980, 2, raw = TRUE),
-    se = TRUE,
-    linewidth = 1.2
+    se = FALSE,
+    linewidth = 1.2,
+    color = "lightpink4"
   ) +
   geom_vline(xintercept = 1988, linetype = "dashed", linewidth = 0.8) +
   labs(
-    title = "Grand Canyon Junction DNI, 1950–2023",
     x = "Year",
-    y = "Annual Mean DNI" +
+    y = "Mean Annual DNI") +
   theme_minimal(base_size = 13) +
   theme(
     plot.title = element_text(face = "bold"),
     panel.grid.minor = element_blank()
-  ))
+  )
  
