@@ -196,6 +196,28 @@ summary_seasonal <- as_tibble(X) |>
   ) |>
   arrange(Season, desc(Mean_CF))
 
+summary_seasonal <- as_tibble(X) |>
+  mutate(Season = season_vec) |>
+  pivot_longer(
+    cols = -Season,
+    names_to  = "Site",
+    values_to = "CF"
+  ) |>
+  group_by(Season, Site) |>
+  summarise(
+    Mean_CF  = mean(CF, na.rm = TRUE),
+    Variance = var(CF,  na.rm = TRUE),
+    .groups  = "drop"
+  )
+
+season_table <- summary_seasonal |>
+  mutate(Cell = sprintf("%.3f", Mean_CF)) |>
+  select(Season, Site, Cell) |>
+  pivot_wider(names_from = Site, values_from = Cell) |>
+  arrange(Season)
+
+season_table
+
 summary_seasonal
 
 con <- pipe("pbcopy", "w")
