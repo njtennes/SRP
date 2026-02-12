@@ -28,10 +28,12 @@ site_files <- c(
 # ============================================
 # gamma (1st one for single optimization)
 # ============================================
-gamma0     <- 1.5
+gamma0     <- .01
 gamma_grid <- 10^seq(-10, 3, length.out = 50)
 
 site_names <- basename(site_files) |> tools::file_path_sans_ext()
+
+site_names[site_names == "Wilcox Solar"] <- "Willcox Solar"
 
 site_meta <- tibble(
   file     = site_files,
@@ -104,7 +106,7 @@ cost_per_MWh <- c(
   "Kingman Solar"     = 29,
   "GC Junction Solar" = 29,
   "Casa Grande Solar" = 29,
-  "Wilcox Solar"      = 29,
+  "Willcox Solar"      = 29,
   "St Johns Solar"    = 29,
   "Deming Solar"      = 29
 )
@@ -157,17 +159,6 @@ summary <- tibble(
 ) |>
   dplyr::arrange(dplyr::desc(Weighted_Output))
 
-kable(
-  summary,
-  format = "latex",
-  booktabs = TRUE,
-  caption = "Summary statistics for candidate renewable sites",
-  digits = 2
-) %>%
-  kable_styling(
-    latex_options = c("hold_position", "scale_down")
-  )
-
 con <- pipe("pbcopy", "w")
 write.table(summary, con, sep = "\t", col.names = NA)
 close(con)
@@ -217,11 +208,44 @@ summary_monthly <- as_tibble(X) |>
   ) |>
   group_by(Month, Site) |>
   summarise(
-    Mean_CF = mean(Yearly_Mean),
-    SD_CF   = sd(Yearly_Mean),
+    Mean_CF = mean(Yearly_Mean/100000),
+    SD_CF   = sd(Yearly_Mean/100000),
+    p1 = quantile(Mean_CF, 0.01, na.rm = TRUE),
+    p99 = quantile(Mean_CF, 0.99, na.rm = TRUE),
     N_years = n(),
     SE_CF   = SD_CF / sqrt(N_years),
     .groups = "drop"
+  )
+
+nameplate_kW <- 1000  # or site-specific if needed
+
+summary_monthly <- as_tibble(X) |>
+  mutate(
+    Month = m,
+    Year  = y
+  ) |>
+  pivot_longer(
+    cols = -c(Month, Year),
+    names_to  = "Site",
+    values_to = "kW"
+  ) |>
+  mutate(
+    CF = kW / nameplate_kW   # convert to CF once, cleanly
+  ) |>
+  group_by(Year, Month, Site) |>
+  summarise(
+    CF_year = mean(CF, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  group_by(Month, Site) |>
+  summarise(
+    Mean_CF  = mean(CF_year, na.rm = TRUE),
+    SD_CF    = sd(CF_year, na.rm = TRUE),
+    p5       = quantile(CF_year, 0.05, na.rm = TRUE),
+    p95      = quantile(CF_year, 0.95, na.rm = TRUE),
+    N_years  = n(),
+    SE_CF    = SD_CF / sqrt(N_years),
+    .groups  = "drop"
   )
 
 summary_monthly <- summary_monthly |>
@@ -261,7 +285,7 @@ wind_sites <- summary_monthly |>
 
 # Generate shades (base R, no extra packages)
 solar_colors <- colorRampPalette(c("#F4A6A6", "#8B0000"))(length(solar_sites))
-wind_colors  <- colorRampPalette(c("#A6C8FF", "#08306B"))(length(wind_sites))
+wind_colors  <- colorRampPalette(c("lightblue", "#08306B"))(length(wind_sites))
 
 # Named vector for scale_color_manual()
 site_colors <- c(
@@ -271,13 +295,8 @@ site_colors <- c(
 
 ggplot(summary_monthly,
        aes(x = Month, y = Mean_CF, color = Site)) +
-  geom_point(size = 2.6, alpha = 0.9) +
-  geom_errorbar(
-    aes(ymin = Mean_CF - SE_CF,
-        ymax = Mean_CF + SE_CF),
-    width = 0.25,
-    alpha = 0.6
-  ) +
+  geom_point(size = 2, alpha = 0.9) +
+  geom_ribbon(aes(ymin = p5, ymax = p95), alpha = 0.2) +
   scale_color_manual(values = site_colors) +
   scale_x_continuous(
     breaks = 1:12,
@@ -316,14 +335,81 @@ hourly_tech <- as_tibble(X) |>
 hourly_tech <- hourly_tech %>%
   mutate(Mean_CF = Mean_CF * 100)
 
+hourly_tech_summer <- as_tibble(X) |>
+  mutate(
+    Hour  = h,
+    Month = m   # vector aligned to rows of X
+  ) |>
+  filter(Month %in% 6:8) |>
+  select(-Month) |>
+  pivot_longer(
+    cols = -Hour,
+    names_to  = "Site",
+    values_to = "CF"
+  ) |>
+  left_join(site_meta |> select(sitename),
+            by = c("Site" = "sitename")) |>
+  group_by(Hour, Site) |>
+  summarise(
+    Mean_CF = mean(CF/1000, na.rm = TRUE),
+    SD_CF   = sd(CF/1000, na.rm = TRUE),
+    p25 = quantile(CF/1000, 0.25, na.rm = TRUE),
+    p75 = quantile(CF/1000, 0.75, na.rm = TRUE),
+    p5 = quantile(CF/1000, 0.05, na.rm = TRUE),
+    p95 = quantile(CF/1000, 0.95, na.rm = TRUE),
+    N       = sum(!is.na(CF)),
+    .groups = "drop"
+  ) |>
+  arrange(Site, Hour)
+
+hourly_tech_summer <- hourly_tech_summer |>
+  mutate(
+    tech = ifelse(
+      grepl("solar", Site, ignore.case = TRUE),
+      "Solar",
+      "Wind"
+    )
+  )
+
+site_order2 <- hourly_tech_summer |>
+  distinct(Site, tech) |>
+  arrange(tech, Site) |>
+  pull(Site)
+
+hourly_tech_summer <- hourly_tech_summer |>
+  mutate(
+    Site = factor(Site, levels = site_order2)
+  )
+
+hourly_tech_summer <- hourly_tech_summer |>
+  mutate(
+    tech = factor(tech, levels = c("Solar", "Wind"))
+  )
+
+ggplot(hourly_tech_summer, aes(y = Mean_CF, x = Hour, color = Site)) +
+  geom_point(size= 1.5, alpha = 1) +
+  geom_ribbon(aes(ymin = p25, ymax = p75), alpha = 0.2) +
+  scale_color_manual(values = site_colors) +
+labs(
+  x = "Hour of Day (June-August)",
+  y = "Expected Capacity Factor (%)",
+  color = "Site"
+) +
+  theme_minimal(base_size = 12)
+
+ggplot(hourly_tech_summer, aes(y = Mean_CF, x = Hour, color = Site)) +
+  geom_point(size= 1.5, alpha = 1) +
+  geom_ribbon(aes(ymin = p5, ymax = p95), alpha = 0.2) +
+  scale_color_manual(values = site_colors) +
+  labs(
+    x = "Hour of Day (June-August)",
+    y = "Expected Capacity Factor (%)",
+    color = "Site"
+  ) +
+  theme_minimal(base_size = 12)
+
 ggplot(hourly_tech, aes(x = Hour, y = Mean_CF, color = tech)) +
   geom_line(size = 1, alpha = 1) +
-  geom_errorbar(
-    aes(ymin = Mean_CF - SE_CF,
-        ymax = Mean_CF + SE_CF),
-    width = 0.25,
-    alpha = 0.6
-  ) +
   scale_x_continuous(breaks = 0:23) +
   scale_color_manual(values = c("Solar" = "lightpink3", "Wind" = "#08306B")) +
   labs(x = "Hour of Day", y = "Expected Capacity Factor (%)", color = "Technology") +
@@ -389,13 +475,15 @@ solve_markowitz <- function(mu, Sigma, gamma = gamma0, solver = "OSQP") {
 # ============================================
 # Single-γ solution
 # ============================================
+gamma0     <- 100
+
 sol0 <- solve_markowitz(mu, Sigma, gamma = gamma0)
 cat("\n--- Single-γ solution ---\n")
 print(
   tibble(Site = sites, Weight = round(sol0$w, 4)) |>
     dplyr::arrange(dplyr::desc(Weight))
 )
-cat(sprintf("γ=%g | E[MWh/$]=%.4f | Var=%.4f\n", sol0$gamma, sol0$exp_output, sol0$variance))
+cat(sprintf("γ=%g | E[MWh^2/$]=%.4f | Var=%.4f\n", sol0$gamma, sol0$exp_output, sol0$variance))
 
 weights_table <- tibble(Site = sites, Weight = round(sol0$w, 4))
 
@@ -449,6 +537,26 @@ ggplot() +
     x = "Variance MWHr^2/$ spent",
     y = "Expected MWHr^2/$ spent", 
     title = "Cost Weighted Efficient Frontier"
+  ) +
+  theme_minimal(base_size = 12)
+
+#for latek
+ggplot() +
+  geom_line(data = frontier, aes(x = variance, y = exp_mwhdollar),
+            linewidth = 0.7, color = "#08306B") +
+  geom_point(data = frontier, aes(x = variance, y = exp_mwhdollar),
+             size = 1.5, color = "#08306B", alpha = 0.7) +
+  geom_point(data = summary, aes(x = Weighted_Var, y = Weighted_Output),
+             color = "red", size = 2) +
+  geom_text_repel(
+    data = summary,
+    aes(x = Weighted_Var, y = Weighted_Output, label = Site),
+    size = 3,
+    color = "lightpink4"
+  ) +
+  labs(
+    x = expression("Variance (" * MWh^2 ~ "/" ~ "$" * ")"),
+    y = expression("Expected (" * MWh^2 ~ "/" ~ "$" * ")")
   ) +
   theme_minimal(base_size = 12)
 
