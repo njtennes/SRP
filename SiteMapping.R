@@ -4,7 +4,7 @@ library(maps)
 
 # ---- Site coordinates (approx) ----
 sites <- data.frame(
-  Site = c("Wilcox, AZ", "Deming, NM", "Kingman, AZ",
+  Site = c("Willcox, AZ", "Deming, NM", "Kingman, AZ",
            "Casa Grande, AZ", "St. Johns, AZ", "Grand Canyon Junction, AZ", 
            "Medicine Bow, WY", "Encino, NM", "Silver City, NM"),
   Lat  = c(32.2, 32.4, 35.2, 32.87, 34.57, 35.65, 41.9, 34.65, 32.74),

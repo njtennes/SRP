@@ -26,7 +26,7 @@ site_files <- c(
 # ============================================
 # gamma (1st one for single optimization)
 # ============================================
-gamma0     <- 1.5
+gamma0     <- 2.5
 gamma_grid <- 10^seq(-10, 3, length.out = 50)
 
 # ============================================
@@ -39,6 +39,10 @@ nameplate_wind_kW  <- 100000
 # Site metadata: name, solar or wind, nameplate capacity
 # ============================================
 site_names <- basename(site_files) |> tools::file_path_sans_ext()
+
+site_names[site_names == "Wilcox Solar"] <- "Willcox Solar"
+
+site_names
 
 site_meta <- tibble(
   file     = site_files,
@@ -164,6 +168,10 @@ summary <- tibble(
 ) |>
   dplyr::arrange(dplyr::desc(Mean_CF))
 
+summary <- summary %>%
+  mutate(Mean_CF = Mean_CF * 100)
+  
+
 con <- pipe("pbcopy", "w")
 write.table(summary, con, sep = "\t", col.names = NA)
 close(con)
@@ -232,7 +240,7 @@ print(round(cor_X, 3))
 
 WindSolar <- X[, c("Medicine Bow Wind", "Encino Wind", "Silver City Wind", 
                    "GC Junction Wind", "Kingman Solar","GC Junction Solar",
-                   "Casa Grande Solar", "Wilcox Solar", "St Johns Solar", 
+                   "Casa Grande Solar", "Willcox Solar", "St Johns Solar", 
                    "Deming Solar")]
 
 #cor_WindSolar <- cor(WindSolar, use = "pairwise.complete.obs")
@@ -250,7 +258,7 @@ WindSolar <- X[, c("Medicine Bow Wind", "Encino Wind", "Silver City Wind",
 #cor_GCJ <- cor(GCJ_only, use = "pairwise.complete.obs")
 #round(cor_GCJ, 3)
 
-WindSolar <- X[, c("Medicine Bow Wind", "Encino Wind", "Wilcox Solar", "Kingman Solar")]
+WindSolar <- X[, c("Medicine Bow Wind", "Encino Wind", "Willcox Solar", "Kingman Solar")]
 cor_WindSolar <- cor(WindSolar, use = "pairwise.complete.obs")
 round(cor_WindSolar, 3)
 
@@ -287,13 +295,15 @@ solve_markowitz <- function(mu, Sigma, gamma = gamma0, lb = NULL, ub = NULL, sol
 # ============================================
 # Single-γ solution
 # ============================================
+gamma0     <- 3
+
 sol0 <- solve_markowitz(mu, Sigma, gamma = gamma0)
 cat("\n--- Single-γ solution ---\n")
 print(
   tibble(Site = sites, Weight = round(sol0$w, 4)) |>
     dplyr::arrange(dplyr::desc(Weight))
 )
-cat(sprintf("γ=%g | E[CF]=%.4f | Var=%.4f\n", sol0$gamma, sol0$exp_CF, sol0$variance))
+ cat(sprintf("γ=%g | E[CF]=%.4f | Var=%.4f\n", sol0$gamma, sol0$exp_CF, sol0$variance))
 
 fronttable <- tibble(Site = sites, Weight = round(sol0$w, 4))
 
@@ -313,17 +323,20 @@ frontier <- tibble(
 ) |>
   dplyr::arrange(variance)
 
+frontier <- frontier %>%
+  mutate(exp_CF = exp_CF * 100)
+
 cat("\n--- Efficient frontier (full year, head) ---\n")
 print(head(frontier, 20))
 
 # ggplot frontier + single-site points
 ggplot() +
   geom_line(data = frontier, aes(x = variance, y = exp_CF),
-            linewidth = 0.7, color = "darkblue") +
+            linewidth = 0.7, color = "#08306B") +
   geom_point(data = frontier, aes(x = variance, y = exp_CF),
-             size = 1.5, color = "darkblue", alpha = 0.7) +
+             size = 1.5, color = "#08306B", alpha = 0.7) +
   geom_point(data = summary, aes(x = Variance, y = Mean_CF),
-             color = "red", size = 2) +
+             color = "lightpink4", size = 2) +
   geom_text_repel(
     data = summary,
     aes(x = Variance, y = Mean_CF, label = Site),
@@ -332,8 +345,8 @@ ggplot() +
   ) +
   labs(
     x = "Variance of Capacity Factor",
-    y = "Expected Capacity Factor",  # change to (%) if you multiply Mean_CF by 100
-    title = "Efficient Frontier with Single-Site Portfolios"
+    y = "Expected Capacity Factor (%)",  # change to (%) if you multiply Mean_CF by 100
+    title = "Cost-Neutral Efficient Frontier with Single-Site Portfolios"
   ) +
   theme_minimal(base_size = 12)
 
@@ -528,6 +541,9 @@ frontier_day <- tibble(
   dplyr::filter(status == "optimal") |>
   dplyr::arrange(variance)
 
+frontier_day <- frontier_day %>%
+  mutate(exp_CF = exp_CF * 100)
+
 cat("\n--- Efficient frontier (DAILY, head) ---\n")
 print(head(frontier_day, 20))
 
@@ -540,9 +556,10 @@ front_compare <- bind_rows(frontier_hour, frontier_day2)
 ggplot(front_compare, aes(x = variance, y = exp_CF, color = Granularity)) +
   geom_line(linewidth = 0.8) +
   geom_point(size = 1.2, alpha = 0.6) +
+  scale_color_manual(values = c("Daily" = "lightpink3", "Hourly" = "#08306B")) +
   labs(
     x = "Variance of CF",
-    y = "Expected CF",
+    y = "Expected CF (%)",
     title = "Efficient Frontier Comparison: Hourly vs Daily-Average CF"
   ) +
   theme_minimal(base_size = 12)
