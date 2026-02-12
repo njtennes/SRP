@@ -415,6 +415,59 @@ ggplot(hourly_tech, aes(x = Hour, y = Mean_CF, color = tech)) +
   labs(x = "Hour of Day", y = "Expected Capacity Factor (%)", color = "Technology") +
   theme_minimal(base_size = 12)
 
+kingman <- as_tibble(X[, "Kingman Solar"])
+
+ggplot(data.frame(CF = kingman), aes(x = CF)) +
+  geom_density(adjust = 1.2, na.rm = TRUE) +
+  labs(
+    title = "Distribution of Kingman Solar Output",
+    x = "Output (kW)",
+    y = "Density"
+  ) +
+  theme_minimal(base_size = 12)
+
+ggplot(data.frame(CF = kingman), aes(x = CF)) +
+  stat_ecdf(geom = "step") +
+  labs(
+    title = "CDF of Kingman Solar Output",
+    x = "Output (kW) or Capacity Factor",
+    y = "F(x)"
+  ) +
+  theme_minimal(base_size = 12)
+
+MB <- as_tibble(X[, "Medicine Bow Wind"])
+
+MBD <- MB %>%
+  mutate(hour = h)
+
+MBD <- MBD %>%
+  mutate(Day_ID = (row_number() - 1) %/% 24 + 1)
+
+MBD <- MBD %>%
+  group_by(Day_ID) %>%
+  summarize(Output= sum(value))
+
+MBD <- MBD %>%
+  mutate(Output= Output/100000)
+
+
+ggplot(MB, aes(x = value)) +
+  geom_density(adjust = 1.2, na.rm = TRUE) +
+  labs(
+    title = "Distribution of Medicine Bow Wind Output",
+    x = "Output (kW)",
+    y = "Density"
+  ) +
+  theme_minimal(base_size = 12)
+
+ggplot(data.frame(CF = MB), aes(x = CF)) +
+  stat_ecdf(geom = "step") +
+  labs(
+    title = "CDF of Medicine Bow Output",
+    x = "Output (kW)",
+    y = "F(x)"
+  ) +
+  theme_minimal(base_size = 12)
 # ============================================
 # Correlation matrices
 # ============================================

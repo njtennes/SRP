@@ -329,6 +329,13 @@ frontier <- frontier %>%
 cat("\n--- Efficient frontier (full year, head) ---\n")
 print(head(frontier, 20))
 
+#manual!!! change as needed
+gamma_points <- tibble::tibble(
+  gamma     = c(0.01, 0.75, 1.5, 3, 100),
+  variance  = c(0.1368, 0.0844, 0.0474, 0.0373, 0.0243),
+  exp_CF    = c(44.6, 43.8, 40.8, 38.9, 31.6)
+)
+
 # ggplot frontier + single-site points
 ggplot() +
   geom_line(data = frontier, aes(x = variance, y = exp_CF),
@@ -343,6 +350,22 @@ ggplot() +
     size = 3,
     color = "red"
   ) +
+  geom_point(data = gamma_points,
+             aes(x = variance, y = exp_CF),
+             color = "red4",
+             size = 2.5) +
+  geom_text_repel(
+    data = gamma_points,
+    aes(x = variance, y = exp_CF,
+        label = paste0("γ = ", gamma)),
+    size = 3.2,
+    color = "black",
+    nudge_y = 0.1,      # move labels slightly up
+    nudge_x = -0.002,    # move left/right if needed
+    box.padding = 0.4,
+    point.padding = 0.3,
+    segment.color = "grey50"
+  )+
   labs(
     x = "Variance of Capacity Factor",
     y = "Expected Capacity Factor (%)",  # change to (%) if you multiply Mean_CF by 100
