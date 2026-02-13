@@ -565,6 +565,16 @@ frontier_labeled <- frontier %>%
                                paste0("γ=", round(gamma, 2)),
                                NA_character_))
 
+##MANUALL!!!
+frontier_labeled <- tibble::tibble(
+  gamma        = c(0.01, 0.10, 0.25, 2.5, 100),
+  variance     = c(1.78, 1.49, 0.48, 0.125, 0.105),
+  exp_mwhdollar = c(1.15, 1.123, 0.972, 0.75, 0.65)
+) |>
+  dplyr::mutate(
+    label_gamma = paste0("\u03B3 = ", gamma)  # γ =
+  )
+
 ggplot() +
   geom_line(data = frontier, aes(x = variance, y = exp_mwhdollar),
             linewidth = 0.7, color = "darkblue") +
@@ -572,13 +582,19 @@ ggplot() +
              size = 1.5, color = "darkblue", alpha = 0.7) +
   geom_point(data = summary, aes(x = Weighted_Var, y = Weighted_Output),
              color = "red", size = 2) +
-  geom_text_repel(
+  geom_point(data = frontier_labeled,
+             aes(x = variance, y = exp_mwhdollar),
+             color = "red4",
+             size = 2.5) +
+  geom_label_repel(
     data = frontier_labeled,
     aes(x = variance, y = exp_mwhdollar, label = label_gamma),
     size = 3,
-    color = "darkblue",
-    na.rm = TRUE,
-    max.overlaps = Inf
+    color = "black",
+    label.size = 0,
+    box.padding = 0.4,
+    point.padding = 0.25,
+    min.segment.length = 0
   ) +
   geom_text_repel(
     data = summary,
@@ -587,9 +603,8 @@ ggplot() +
     color = "red"
   ) +
   labs(
-    x = "Variance MWHr^2/$ spent",
-    y = "Expected MWHr^2/$ spent", 
-    title = "Cost Weighted Efficient Frontier"
+    x = expression("Variance (" * MWh^2 ~ "/" ~ "$" * ")"),
+    y = expression("Expected (" * MWh^2 ~ "/" ~ "$" * ")")
   ) +
   theme_minimal(base_size = 12)
 
