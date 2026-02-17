@@ -99,16 +99,16 @@ meta  <- bx$meta
 #write.csv(X, file = "/Users/nicktennes/Desktop/FullOutputMatrix.csv", row.names = FALSE)
 
 cost_per_MWh <- c(
-  "Medicine Bow Wind" = 60,
-  "Encino Wind"       = 52.5,
-  "Silver City Wind"  = 52.5,
-  "GC Junction Wind"  = 51,
-  "Kingman Solar"     = 29,
-  "GC Junction Solar" = 29,
-  "Casa Grande Solar" = 29,
-  "Willcox Solar"      = 29,
-  "St Johns Solar"    = 29,
-  "Deming Solar"      = 29
+  "Medicine Bow Wind" = 374.32,
+  "Encino Wind"       = 265.66,
+  "Silver City Wind"  = 203.47,
+  "GC Junction Wind"  = 178.92,
+  "Kingman Solar"     = 175.33,
+  "GC Junction Solar" = 166.28,
+  "Casa Grande Solar" = 122.43,
+  "Willcox Solar"     = 165.09,
+  "St Johns Solar"    = 171.76,
+  "Deming Solar"      = 184.39
 )
 cost_per_MWh <- cost_per_MWh[sites]
 # ============================================
@@ -528,7 +528,7 @@ solve_markowitz <- function(mu, Sigma, gamma = gamma0, solver = "OSQP") {
 # ============================================
 # Single-γ solution
 # ============================================
-gamma0     <- 100
+gamma0     <- 2.5
 
 sol0 <- solve_markowitz(mu, Sigma, gamma = gamma0)
 cat("\n--- Single-γ solution ---\n")
