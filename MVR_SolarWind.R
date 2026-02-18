@@ -224,14 +224,6 @@ season_table <- summary_seasonal |>
   pivot_wider(names_from = Site, values_from = Cell) |>
   arrange(Season)
 
-season_table
-
-summary_seasonal
-
-con <- pipe("pbcopy", "w")
-write.table(summary, con, sep = "\t", col.names = NA)
-close(con)
-
 # ============================================
 # Correlation matrices
 # ============================================
@@ -311,6 +303,151 @@ con <- pipe("pbcopy", "w")
 write.table(fronttable, con, sep = "\t", col.names = NA)
 close(con)
 
+#============
+# Gamma Vector
+#==============
+gamma_vec <- c(0.01, .75, 1.5, 3, 100)
+
+sols <- map(gamma_vec, ~solve_markowitz(mu, Sigma, gamma = .x, solver = "OSQP"))
+
+gname <- function(x) format(x, trim = TRUE, scientific = FALSE)
+
+moments_long <- tibble(
+  gamma = gamma_vec,
+  `E`   = map_dbl(sols, "exp_CF"),
+  Var   = map_dbl(sols, "variance")
+) |>
+  pivot_longer(cols = c(`E`, Var), names_to = "Moment", values_to = "Value")
+
+moments_tbl <- moments_long |>
+  mutate(gamma = gname(gamma)) |>
+  pivot_wider(names_from = gamma, values_from = Value) |>
+  mutate(
+    Moment = recode(Moment,
+                    `E` = "Expected Capacity Factor (%)",   
+    )
+  ) |>
+  select(Moment, all_of(gname(gamma_vec)))
+
+weights_long <- map2_dfr(
+  sols, gamma_vec,
+  ~tibble(gamma = .y, Site = sites, Weight = .x$w)
+) %>%
+  mutate(
+    Weight = ifelse(abs(Weight) < 1e-6, 0, Weight)
+  )
+
+weights_tbl <- weights_long |>
+  mutate(
+    gamma = format(gamma, scientific = FALSE),
+    WeightPct = round(100 * Weight, 1)
+  ) |>
+  select(Site, gamma, WeightPct) |>
+  pivot_wider(names_from = gamma, values_from = WeightPct) |>
+  arrange(Site)
+
+# =================
+# stacked bar chart of weights
+# =================
+
+weights_long_plot <- weights_tbl |>
+  pivot_longer(
+    cols = -Site,
+    names_to = "gamma",
+    values_to = "WeightPct"
+  ) |>
+  mutate(
+    gamma = factor(gamma, levels = colnames(weights_tbl)[-1])
+  )
+
+weights_long_plot <- weights_long_plot |>
+  left_join(site_meta |> select(sitename, tech),
+            by = c("Site" = "sitename"))
+
+weights_long_plot <- weights_long_plot |>
+  group_by(Site) |>
+  filter(sum(WeightPct, na.rm = TRUE) > 0)
+
+weights_long_plot <- weights_long_plot |>
+  mutate(
+    tech = factor(tech, levels = c("Solar", "Wind"))
+  ) |>
+  arrange(tech, Site) |>
+  mutate(
+    Site = factor(Site, levels = unique(Site))
+  )
+
+site_order <- c("Casa Grande Solar", "Deming Solar", "Kingman Solar",
+                "Encino Wind", "GC Junction Wind", "Medicine Bow Wind", "Silver City Wind")
+
+site_colors <- c(
+  # Solar
+  "Casa Grande Solar" = "lightpink1",
+  "Deming Solar"      = "lightpink3",
+  "Kingman Solar"     = "indianred3",
+  
+  # Wind 
+  "Encino Wind"       = "lightsteelblue2",
+  "GC Junction Wind"  = "lightskyblue1",
+  "Medicine Bow Wind" = "steelblue",
+  "Silver City Wind"  = "lightsteelblue4"
+)
+
+ggplot(weights_long_plot, aes(x = gamma, y = WeightPct, fill = Site)) +
+  geom_bar(stat = "identity", width = 0.75) +
+  scale_fill_manual(
+    values = site_colors[site_order],   
+    breaks = site_order,                
+    drop   = TRUE
+  ) +
+  geom_text(
+    aes(label = ifelse(WeightPct >= 2,
+                       sprintf("%.1f%%", WeightPct),
+                       "")),
+    position = position_stack(vjust = 0.5),
+    size = 3
+  ) +
+  labs(x = expression("Risk Aversion Parameter, " * gamma), y = "Portfolio Weight (%)", fill = "Site") +
+  theme_minimal(base_size = 12)
+
+# ===================
+# Plot of discrete gammas
+# ===================
+
+moments_plot <- moments_tbl |>
+  pivot_longer(
+    cols = -Moment,
+    names_to = "gamma",
+    values_to = "Value"
+  ) |>
+  pivot_wider(
+    names_from = Moment,
+    values_from = Value
+  ) |>
+  rename(
+    Variance = `Var`,
+    Return = 'E[MWh/$]'
+  ) |>
+  mutate(
+    gamma = factor(gamma, levels = colnames(moments_tbl)[-1])
+  )
+
+ggplot(moments_plot,
+       aes(x = Variance,
+           y = Return)) +
+  geom_point(size = 3, shape = 8) +
+  geom_line(size = .25, alpha = 5) +
+  geom_text(
+    aes(label = gamma),
+    vjust = -0.8,
+    size = 3
+  ) +
+  labs(
+    x = "Variance of Capacity Factor",
+    y = "Expected Capacity Factor (%)"
+  ) +
+  theme_minimal(base_size = 12)
+
 # ============================================
 # Efficient frontier along gamma grid
 # ============================================
@@ -330,11 +467,10 @@ cat("\n--- Efficient frontier (full year, head) ---\n")
 print(head(frontier, 20))
 
 #manual!!! change as needed
-gamma_points <- tibble::tibble(
-  gamma     = c(0.01, 0.75, 1.5, 3, 100),
-  variance  = c(0.1368, 0.0844, 0.0474, 0.0373, 0.0243),
-  exp_CF    = c(44.6, 43.8, 40.8, 38.9, 31.6)
-)
+#gamma_points <- tibble::tibble(
+ # gamma     = c(0.01, 0.75, 1.5, 3, 100),
+ #  variance  = c(0.1368, 0.0844, 0.0474, 0.0373, 0.0243),
+ #  exp_CF    = c(44.6, 43.8, 40.8, 38.9, 31.6))
 
 # ggplot frontier + single-site points
 ggplot() +
