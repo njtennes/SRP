@@ -217,7 +217,7 @@ summary_monthly <- as_tibble(X) |>
     .groups = "drop"
   )
 
-nameplate_kW <- 1000  # or site-specific if needed
+nameplate_kW <- 1000  
 
 summary_monthly <- as_tibble(X) |>
   mutate(
@@ -569,6 +569,9 @@ moments_tbl <- moments_long |>
   ) |>
   select(Moment, all_of(gname(gamma_vec)))
 
+moments_tbl <- moments_tbl %>%
+  rename("100" = "100.00")
+
 weights_long <- map2_dfr(
   sols, gamma_vec,
   ~tibble(gamma = .y, Site = sites, Weight = .x$w)
@@ -589,6 +592,21 @@ weights_tbl <- weights_long |>
 # =================
 # stacked bar chart of weights
 # =================
+site_order <- c("Casa Grande Solar", "Deming Solar", "Kingman Solar",
+                "Encino Wind", "GC Junction Wind", "Medicine Bow Wind", "Silver City Wind")
+
+site_colors <- c(
+  # Solar
+  "Casa Grande Solar" = "lightpink1",
+  "Deming Solar"      = "lightpink3",
+  "Kingman Solar"     = "indianred4",
+  
+  # Wind 
+  "Encino Wind"       = "lightsteelblue2",
+  "GC Junction Wind"  = "lightskyblue1",
+  "Medicine Bow Wind" = "steelblue",
+  "Silver City Wind"  = "lightsteelblue4"
+)
 
 weights_long_plot <- weights_tbl |>
   pivot_longer(
@@ -616,9 +634,6 @@ weights_long_plot <- weights_long_plot |>
   mutate(
     Site = factor(Site, levels = unique(Site))
   )
-
-site_order <- c("Casa Grande Solar", "Deming Solar", "Kingman Solar",
-                "Encino Wind", "GC Junction Wind", "Medicine Bow Wind", "Silver City Wind")
 
 ggplot(weights_long_plot, aes(x = gamma, y = WeightPct, fill = Site)) +
   geom_bar(stat = "identity", width = 0.75) +
@@ -663,9 +678,10 @@ ggplot(moments_plot,
       aes(x = Variance,
           y = Return)) +
   geom_point(size = 3, shape = 8) +
+  geom_line(size = .25, alpha = 5) +
   geom_text(
     aes(label = gamma),
-    vjust = -0.8,
+    vjust = -1.5,
     size = 3
   ) +
   labs(
