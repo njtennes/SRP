@@ -329,6 +329,9 @@ moments_tbl <- moments_long |>
   ) |>
   select(Moment, all_of(gname(gamma_vec)))
 
+moments_tbl <- moments_tbl %>%
+  rename("100" = "100.00")
+
 weights_long <- map2_dfr(
   sols, gamma_vec,
   ~tibble(gamma = .y, Site = sites, Weight = .x$w)
@@ -413,7 +416,6 @@ ggplot(weights_long_plot, aes(x = gamma, y = WeightPct, fill = Site)) +
 # ===================
 # Plot of discrete gammas
 # ===================
-
 moments_plot <- moments_tbl |>
   pivot_longer(
     cols = -Moment,
@@ -426,7 +428,7 @@ moments_plot <- moments_tbl |>
   ) |>
   rename(
     Variance = `Var`,
-    Return = 'E[MWh/$]'
+    ECF = 'Expected Capacity Factor (%)'
   ) |>
   mutate(
     gamma = factor(gamma, levels = colnames(moments_tbl)[-1])
@@ -434,7 +436,7 @@ moments_plot <- moments_tbl |>
 
 ggplot(moments_plot,
        aes(x = Variance,
-           y = Return)) +
+           y = ECF)) +
   geom_point(size = 3, shape = 8) +
   geom_line(size = .25, alpha = 5) +
   geom_text(
