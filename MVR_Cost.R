@@ -28,7 +28,7 @@ site_files <- c(
 # ============================================
 # gamma (1st one for single optimization)
 # ============================================
-gamma0     <- .01
+gamma0     <- 2
 gamma_grid <- 10^seq(-10, 3, length.out = 50)
 
 site_names <- basename(site_files) |> tools::file_path_sans_ext()
@@ -528,7 +528,7 @@ solve_markowitz <- function(mu, Sigma, gamma = gamma0, solver = "OSQP") {
 # ============================================
 # Single-γ solution
 # ============================================
-gamma0     <- 2.5
+gamma0     <- 7.5
 
 sol0 <- solve_markowitz(mu, Sigma, gamma = gamma0)
 cat("\n--- Single-γ solution ---\n")
@@ -543,9 +543,139 @@ weights_table <- tibble(Site = sites, Weight = round(sol0$w, 4))
 con <- pipe("pbcopy", "w")
 write.table(weights_table, con, sep = "\t", col.names = NA)
 close(con)
+#============
+# Gamma Vector
+#==============
+gamma_vec <- c(0.01, .75, 1.125, 3, 100)
+
+sols <- map(gamma_vec, ~solve_markowitz(mu, Sigma, gamma = .x, solver = "OSQP"))
+
+gname <- function(x) format(x, trim = TRUE, scientific = FALSE)
+
+moments_long <- tibble(
+gamma = gamma_vec,
+`E`   = map_dbl(sols, "exp_output"),
+Var   = map_dbl(sols, "variance")
+) |>
+  pivot_longer(cols = c(`E`, Var), names_to = "Moment", values_to = "Value")
+
+moments_tbl <- moments_long |>
+  mutate(gamma = gname(gamma)) |>
+  pivot_wider(names_from = gamma, values_from = Value) |>
+  mutate(
+    Moment = recode(Moment,
+                    `E` = "E[MWh/$]",   
+    )
+  ) |>
+  select(Moment, all_of(gname(gamma_vec)))
+
+weights_long <- map2_dfr(
+  sols, gamma_vec,
+  ~tibble(gamma = .y, Site = sites, Weight = .x$w)
+) %>%
+  mutate(
+    Weight = ifelse(abs(Weight) < 1e-6, 0, Weight)
+  )
+
+weights_tbl <- weights_long |>
+  mutate(
+    gamma = format(gamma, scientific = FALSE),
+    WeightPct = round(100 * Weight, 1)
+  ) |>
+  select(Site, gamma, WeightPct) |>
+  pivot_wider(names_from = gamma, values_from = WeightPct) |>
+  arrange(Site)
+
+# =================
+# stacked bar chart of weights
+# =================
+
+weights_long_plot <- weights_tbl |>
+  pivot_longer(
+    cols = -Site,
+    names_to = "gamma",
+    values_to = "WeightPct"
+  ) |>
+  mutate(
+    gamma = factor(gamma, levels = colnames(weights_tbl)[-1])
+  )
+
+weights_long_plot <- weights_long_plot |>
+  left_join(site_meta |> select(sitename, tech),
+            by = c("Site" = "sitename"))
+
+weights_long_plot <- weights_long_plot |>
+  group_by(Site) |>
+  filter(sum(WeightPct, na.rm = TRUE) > 0)
+
+weights_long_plot <- weights_long_plot |>
+  mutate(
+    tech = factor(tech, levels = c("Solar", "Wind"))
+  ) |>
+  arrange(tech, Site) |>
+  mutate(
+    Site = factor(Site, levels = unique(Site))
+  )
+
+site_order <- c("Casa Grande Solar", "Deming Solar", "Kingman Solar",
+                "Encino Wind", "GC Junction Wind", "Medicine Bow Wind", "Silver City Wind")
+
+ggplot(weights_long_plot, aes(x = gamma, y = WeightPct, fill = Site)) +
+  geom_bar(stat = "identity", width = 0.75) +
+  scale_fill_manual(
+    values = site_colors[site_order],   
+    breaks = site_order,                
+    drop   = TRUE
+  ) +
+  geom_text(
+    aes(label = ifelse(WeightPct >= 2,
+                       sprintf("%.1f%%", WeightPct),
+                       "")),
+    position = position_stack(vjust = 0.5),
+    size = 3
+  ) +
+  labs(x = expression("Risk Aversion Parameter, " * gamma), y = "Portfolio Weight (%)", fill = "Site") +
+  theme_minimal(base_size = 12)
+
+# ===================
+# Plot of discrete gammas
+# ===================
+
+moments_plot <- moments_tbl |>
+  pivot_longer(
+    cols = -Moment,
+    names_to = "gamma",
+    values_to = "Value"
+  ) |>
+  pivot_wider(
+    names_from = Moment,
+    values_from = Value
+  ) |>
+  rename(
+    Variance = `Var`,
+    Return = 'E[MWh/$]'
+  ) |>
+  mutate(
+    gamma = factor(gamma, levels = colnames(moments_tbl)[-1])
+  )
+
+ggplot(moments_plot,
+      aes(x = Variance,
+          y = Return)) +
+  geom_point(size = 3, shape = 8) +
+  geom_text(
+    aes(label = gamma),
+    vjust = -0.8,
+    size = 3
+  ) +
+  labs(
+    x = "Variance (MWh/Million $)",
+    y = "Expected Return (MWh/Million $)"
+  ) +
+  theme_minimal(base_size = 12)
 
 # ============================================
-# Efficient frontier along gamma grid
+# Full efficient frontier
 # ============================================
 front <- lapply(gamma_grid, function(g) solve_markowitz(mu, Sigma, gamma = g))
 
@@ -567,7 +697,7 @@ frontier_labeled <- frontier %>%
 
 ##MANUALL!!!
 frontier_labeled <- tibble::tibble(
-  gamma        = c(0.01, 0.10, 0.25, 2.5, 100),
+  gamma        = c(0.01, 0.75, 1.5, 3, 100),
   variance     = c(1.78, 1.49, 0.48, 0.125, 0.105),
   exp_mwhdollar = c(1.15, 1.123, 0.972, 0.75, 0.65)
 ) |>
@@ -582,20 +712,20 @@ ggplot() +
              size = 1.5, color = "darkblue", alpha = 0.7) +
   geom_point(data = summary, aes(x = Weighted_Var, y = Weighted_Output),
              color = "red", size = 2) +
-  geom_point(data = frontier_labeled,
-             aes(x = variance, y = exp_mwhdollar),
-             color = "red4",
-             size = 2.5) +
-  geom_label_repel(
-    data = frontier_labeled,
-    aes(x = variance, y = exp_mwhdollar, label = label_gamma),
-    size = 3,
-    color = "black",
-    label.size = 0,
-    box.padding = 0.4,
-    point.padding = 0.25,
-    min.segment.length = 0
-  ) +
+  #geom_point(data = frontier_labeled,
+           #  aes(x = variance, y = exp_mwhdollar),
+           #  color = "red4",
+           #  size = 2.5) +
+ # geom_label_repel(
+   # data = frontier_labeled,
+   # aes(x = variance, y = exp_mwhdollar, label = label_gamma),
+   # size = 3,
+   # color = "black",
+   # label.size = 0,
+   # box.padding = 0.4,
+   # point.padding = 0.25,
+   # min.segment.length = 0
+  # ) +
   geom_text_repel(
     data = summary,
     aes(x = Weighted_Var, y = Weighted_Output, label = Site),
@@ -603,8 +733,8 @@ ggplot() +
     color = "red"
   ) +
   labs(
-    x = expression("Variance (" * MWh^2 ~ "/" ~ "$" * ")"),
-    y = expression("Expected (" * MWh^2 ~ "/" ~ "$" * ")")
+    x = expression("Variance (" * MWh ~ "/" ~ "$ Millions" * ")"),
+    y = expression("Expected (" * MWh ~ "/" ~ "$ Millions" * ")")
   ) +
   theme_minimal(base_size = 12)
 
