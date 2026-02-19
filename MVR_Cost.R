@@ -29,10 +29,11 @@ site_files <- c(
 # gamma (1st one for single optimization)
 # ============================================
 gamma0     <- 2
-gamma_grid <- 10^seq(-10, 3, length.out = 50)
+gamma_grid <- 10^seq(-10, 4, length.out = 100)
 
 site_names <- basename(site_files) |> tools::file_path_sans_ext()
 
+#bahahaha
 site_names[site_names == "Wilcox Solar"] <- "Willcox Solar"
 
 site_meta <- tibble(
@@ -144,6 +145,7 @@ X_MW <- X / 1000
 # Cost-adjusted output series: (MW) / ($/MWh)  ~  MWh per $
 X_econ <- sweep(X_MW, 2, cost_per_MWh, FUN = "/")
 
+SigmaMW <- cov(X_MW)
 Sigma <- cov(X_econ)
 mu    <- colMeans(X_econ)
 mu_output <- colMeans(X_MW)
@@ -544,7 +546,7 @@ con <- pipe("pbcopy", "w")
 write.table(weights_table, con, sep = "\t", col.names = NA)
 close(con)
 #============
-# Gamma Vector
+# Discrete Gamma Vector
 #==============
 gamma_vec <- c(0.01, .75, 1.125, 3, 100)
 
@@ -570,7 +572,16 @@ moments_tbl <- moments_long |>
   select(Moment, all_of(gname(gamma_vec)))
 
 moments_tbl <- moments_tbl %>%
-  rename("100" = "100.00")
+  rename("100" = "100.000")
+
+moments_tbl <- moments_tbl %>%
+  rename("3" = "3.000")
+
+moments_tbl <- moments_tbl %>%
+  rename("0.75" = "0.750")
+
+moments_tbl <- moments_tbl %>%
+  rename("0.01" = "0.010")
 
 weights_long <- map2_dfr(
   sols, gamma_vec,
@@ -588,7 +599,6 @@ weights_tbl <- weights_long |>
   select(Site, gamma, WeightPct) |>
   pivot_wider(names_from = gamma, values_from = WeightPct) |>
   arrange(Site)
-
 # =================
 # stacked bar chart of weights
 # =================
@@ -678,15 +688,15 @@ ggplot(moments_plot,
       aes(x = Variance,
           y = Return)) +
   geom_point(size = 3, shape = 8) +
-  geom_line(size = .25, alpha = 5) +
+  geom_line(linewidth = .25, alpha = 5) +
   geom_text(
     aes(label = gamma),
     vjust = -1.5,
     size = 3
   ) +
   labs(
-    x = "Variance (MWh/Million $)",
-    y = "Expected Return (MWh/Million $)"
+    x = expression("Variance (" * MW ~ "/" ~ "Hour x $ Millions" * ")"),
+    y = expression("Expected (" * MW ~ "/" ~ "Hour x $ Millions" * ")")
   ) +
   theme_minimal(base_size = 12)
 
@@ -722,9 +732,9 @@ frontier_labeled <- tibble::tibble(
   )
 
 ggplot() +
-  geom_line(data = frontier, aes(x = variance, y = exp_mwhdollar),
+  geom_line(data = frontier_rel, aes(x = variance, y = exp_output),
             linewidth = 0.7, color = "darkblue") +
-  geom_point(data = frontier, aes(x = variance, y = exp_mwhdollar),
+  geom_point(data = frontier_rel, aes(x = variance, y = exp_output),
              size = 1.5, color = "darkblue", alpha = 0.7) +
   geom_point(data = summary, aes(x = Weighted_Var, y = Weighted_Output),
              color = "red", size = 2) +
@@ -749,8 +759,8 @@ ggplot() +
     color = "red"
   ) +
   labs(
-    x = expression("Variance (" * MWh ~ "/" ~ "$ Millions" * ")"),
-    y = expression("Expected (" * MWh ~ "/" ~ "$ Millions" * ")")
+    x = expression("Variance (" * MW ~ "/" ~ "Hour x $ Millions" * ")"),
+    y = expression("Expected (" * MW ~ "/" ~ "Hour x $ Millions" * ")")
   ) +
   theme_minimal(base_size = 12)
 
@@ -769,19 +779,19 @@ ggplot() +
     color = "lightpink4"
   ) +
   labs(
-    x = expression("Variance (" * MWh^2 ~ "/" ~ "$" * ")"),
-    y = expression("Expected (" * MWh^2 ~ "/" ~ "$" * ")")
+    x = expression("Variance (" * MW ~ "/" ~ "Hour x $ Millions" * ")"),
+    y = expression("Expected (" * MW ~ "/" ~ "Hour x $ Millions" * ")")
   ) +
   theme_minimal(base_size = 12)
 
 ###### ============================================
-# Reliability-hour subset (custom windows)
-# May–Sep 3–7pm, Dec–Mar 6–9am and 6–9pm
+# Reliability-hour subset
+# Currently: Jun-Sep, 8-10pm
 # ============================================
 
 idx_rel <- which(
   # Summer late afternoon peak: May–Sep, 3–7pm
-  (meta$Month %in% 6:8  & meta$HourOfDay %in% 16:20) #|
+  (meta$Month %in% 6:9  & meta$HourOfDay %in% 18:22) #|
     # Winter morning peak: Dec–Mar, 6–9am
    # (meta$Month %in% c(12, 1, 2, 3) & meta$HourOfDay %in% 6:9) |
     # Winter evening peak: Dec–Mar, 6–9pm
@@ -792,6 +802,16 @@ X_econ_rel <- X_econ[idx_rel, , drop = FALSE]
 
 mu_rel    <- colMeans(X_econ_rel, na.rm = TRUE)
 Sigma_rel <- stats::cov(X_econ_rel, use = "pairwise.complete.obs")
+
+summary_rel <- tibble(
+  Site     = sites,
+  Weighted_Output = mu_rel,
+  Weighted_Var = apply(X_econ_rel, 2, var),
+  Mean_output = mu_output
+) |>
+  dplyr::arrange(dplyr::desc(Weighted_Output))
+
+summary_rel[1, 3] <- 0.030560370
 
 # Single-γ solution for reliability hours
 sol_rel <- solve_markowitz(mu_rel, Sigma_rel, gamma = gamma0)
@@ -810,36 +830,176 @@ con <- pipe("pbcopy", "w")
 write.table(fronttable_rel, con, sep = "\t", col.names = NA)
 close(con)
 
+#============
+# Discrete Gamma Vector
+#==============
+gamma_vec <- c(0.01, .75, 1.125, 3, 100)
+
+sols_rel <- map(gamma_vec, ~solve_markowitz(mu_rel, Sigma_rel, gamma = .x, solver = "OSQP"))
+
+gname <- function(x) format(x, trim = TRUE, scientific = FALSE)
+
+moments_long_rel <- tibble(
+  gamma = gamma_vec,
+  `E`   = map_dbl(sols_rel, "exp_output"),
+  Var   = map_dbl(sols_rel, "variance")
+) |>
+  pivot_longer(cols = c(`E`, Var), names_to = "Moment", values_to = "Value")
+
+moments_tbl_rel <- moments_long_rel |>
+  mutate(gamma = gname(gamma)) |>
+  pivot_wider(names_from = gamma, values_from = Value) |>
+  mutate(
+    Moment = recode(Moment,
+                    `E` = "E[MWh/$]",   
+    )
+  ) |>
+  select(Moment, all_of(gname(gamma_vec)))
+
+weights_long_rel <- map2_dfr(
+  sols_rel, gamma_vec,
+  ~tibble(gamma = .y, Site = sites, Weight = .x$w)
+) %>%
+  mutate(
+   Weight = ifelse(abs(Weight) < 1e-10, 0, Weight)
+  )
+
+weights_tbl_rel <- weights_long_rel |>
+  mutate(
+    gamma = format(gamma, scientific = FALSE),
+    WeightPct = round(100 * Weight, 1)
+  ) |>
+  select(Site, gamma, WeightPct) |>
+  pivot_wider(names_from = gamma, values_from = WeightPct) |>
+  arrange(Site)
+# =================
+# stacked bar chart of weights
+# =================
+site_order <- c("Casa Grande Solar", "Deming Solar", "Kingman Solar",
+                "Encino Wind", "GC Junction Wind", "Medicine Bow Wind", "Silver City Wind")
+
+site_colors <- c(
+  # Solar
+  "Casa Grande Solar" = "lightpink1",
+  "Deming Solar"      = "lightpink3",
+  "Kingman Solar"     = "indianred4",
+  
+  # Wind 
+  "Encino Wind"       = "lightsteelblue2",
+  "GC Junction Wind"  = "lightskyblue1",
+  "Medicine Bow Wind" = "steelblue",
+  "Silver City Wind"  = "lightsteelblue4"
+)
+
+weights_long_rel_plot <- weights_tbl_rel |>
+  pivot_longer(
+    cols = -Site,
+    names_to = "gamma",
+    values_to = "WeightPct"
+  ) |>
+  mutate(
+    gamma = factor(gamma, levels = colnames(weights_tbl_rel)[-1])
+  )
+
+weights_long_rel_plot <- weights_long_rel_plot |>
+  left_join(site_meta |> select(sitename, tech),
+            by = c("Site" = "sitename"))
+
+weights_long_rel_plot <- weights_long_rel_plot |>
+  group_by(Site) |>
+  filter(sum(WeightPct, na.rm = TRUE) > 0)
+
+weights_long_rel_plot <- weights_long_rel_plot |>
+  mutate(
+    tech = factor(tech, levels = c("Solar", "Wind"))
+  ) |>
+  arrange(tech, Site) |>
+  mutate(
+    Site = factor(Site, levels = unique(Site))
+  )
+
+ggplot(weights_long_rel_plot, aes(x = gamma, y = WeightPct, fill = Site)) +
+  geom_bar(stat = "identity", width = 0.75) +
+  scale_fill_manual(
+    values = site_colors[site_order],   
+    breaks = site_order,                
+    drop   = TRUE
+  ) +
+  geom_text(
+    aes(label = ifelse(WeightPct >= 2,
+                       sprintf("%.1f%%", WeightPct),
+                       "")),
+    position = position_stack(vjust = 0.5),
+    size = 3
+  ) +
+  labs(x = expression("Risk Aversion Parameter, " * gamma), y = "Portfolio Weight (%)", fill = "Site") +
+  theme_minimal(base_size = 12)
+
+# ===================
+# Plot of discrete gammas
+# ===================
+
+moments_plot_rel <- moments_tbl_rel |>
+  pivot_longer(
+    cols = -Moment,
+    names_to = "gamma",
+    values_to = "Value"
+  ) |>
+  pivot_wider(
+    names_from = Moment,
+    values_from = Value
+  ) |>
+  rename(
+    Variance = `Var`,
+    Return = 'E[MWh/$]'
+  )
+
+ggplot(moments_plot_rel,
+       aes(x = Variance,
+           y = Return)) +
+  geom_point(size = 3, shape = 8) +
+  geom_line(linewidth = .25, alpha = 5) +
+  geom_text(
+    aes(label = gamma),
+    vjust = -1.5,
+    size = 3
+  ) +
+  labs(
+    x = "Variance (MWh/Million $)",
+    y = "Expected Return (MWh/Million $)"
+  ) +
+  theme_minimal(base_size = 12)
+
+##############
 # Frontier for reliability hours
+##############
 front_rel <- lapply(gamma_grid, function(g) solve_markowitz(mu_rel, Sigma_rel, gamma = g))
 
 frontier_rel <- tibble(
   gamma    = sapply(front_rel, `[[`, "gamma"),
-  exp_CF   = sapply(front_rel, `[[`, "exp_CF"),
+  exp_output   = sapply(front_rel, `[[`, "exp_output"),
   variance = sapply(front_rel, `[[`, "variance"),
   status   = sapply(front_rel, `[[`, "status")
 ) |>
   dplyr::filter(status == "optimal") |>
   dplyr::arrange(variance)
 
-cat("\n=== Reliability hours: Efficient frontier (head) ===\n")
-print(head(frontier_rel, 20))
+ggplot() +
+  geom_line(data = frontier_rel, aes(x = variance, y = exp_output),
+            linewidth = 0.7, color = "darkblue") +
+  geom_point(data = frontier_rel, aes(x = variance, y = exp_output),
+             size = 1.5, color = "darkblue", alpha = 0.7) +
+  geom_point(data = summary_rel, aes(x = Weighted_Var, y = Weighted_Output),
+             color = "red", size = 2) +
+  geom_text_repel(
+    data = summary_rel,
+    aes(x = Weighted_Var, y = Weighted_Output, label = Site),
+    size = 3,
+    color = "red"
+  ) +
+  labs(
+    x = expression("Variance (" * MW ~ "/" ~ "Hour x $ Millions" * ")"),
+    y = expression("Expected (" * MW ~ "/" ~ "Hour x $ Millions" * ")")
+  ) +
+  theme_minimal(base_size = 12)
 
-plot(frontier_rel$variance, frontier_rel$exp_CF, pch = 16,
-     xlab = "Variance of CF (reliability hours)", ylab = "Expected CF (reliability hours)",
-     main = "Efficient Frontier — Reliability Hours")
-grid()
-
-# Reliability-hour site stats + correlation (optional, mirrors your JA section)
-site_stats_rel <- tibble(
-  Site     = sites,
-  Mean_CF  = mu_rel,
-  Variance = apply(X_rel, 2, var, na.rm = TRUE)
-) |>
-  dplyr::arrange(dplyr::desc(Mean_CF))
-
-cat("\n=== Reliability hours: Site stats ===\n")
-print(site_stats_rel)
-
-cor_X_rel <- cor(X_rel, use = "pairwise.complete.obs")
-print(round(cor_X_rel, 3))
