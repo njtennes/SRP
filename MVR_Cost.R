@@ -29,7 +29,7 @@ site_files <- c(
 # gamma (1st one for single optimization)
 # ============================================
 gamma0     <- 2
-gamma_grid <- 10^seq(-10, 4, length.out = 100)
+gamma_grid <- 10^seq(-10, 3, length.out = 50)
 
 site_names <- basename(site_files) |> tools::file_path_sans_ext()
 
@@ -695,8 +695,8 @@ ggplot(moments_plot,
     size = 3
   ) +
   labs(
-    x = expression("Variance (" * MW ~ "/" ~ "Hour x $ Millions" * ")"),
-    y = expression("Expected (" * MW ~ "/" ~ "Hour x $ Millions" * ")")
+    x = expression("Variance (" * MW ~ "/" ~ "Hour x $ Millions Spent" * ")"),
+    y = expression("Expected (" * MW ~ "/" ~ "Hour x $ Millions Spent" * ")")
   ) +
   theme_minimal(base_size = 12)
 
@@ -722,36 +722,36 @@ frontier_labeled <- frontier %>%
                                NA_character_))
 
 ##MANUALL!!!
-frontier_labeled <- tibble::tibble(
-  gamma        = c(0.01, 0.75, 1.5, 3, 100),
-  variance     = c(1.78, 1.49, 0.48, 0.125, 0.105),
-  exp_mwhdollar = c(1.15, 1.123, 0.972, 0.75, 0.65)
-) |>
-  dplyr::mutate(
-    label_gamma = paste0("\u03B3 = ", gamma)  # γ =
-  )
+#frontier_labeled <- tibble::tibble(
+#  gamma        = c(0.01, 0.75, 1.5, 3, 100),
+#  variance     = c(1.78, 1.49, 0.48, 0.125, 0.105),
+#  exp_mwhdollar = c(1.15, 1.123, 0.972, 0.75, 0.65)
+#) |>
+#  dplyr::mutate(
+#   label_gamma = paste0("\u03B3 = ", gamma)  # γ =
+#  )
 
 ggplot() +
-  geom_line(data = frontier_rel, aes(x = variance, y = exp_output),
+  geom_line(data = frontier, aes(x = variance, y = exp_mwhdollar),
             linewidth = 0.7, color = "darkblue") +
-  geom_point(data = frontier_rel, aes(x = variance, y = exp_output),
+  geom_point(data = frontier, aes(x = variance, y = exp_mwhdollar),
              size = 1.5, color = "darkblue", alpha = 0.7) +
   geom_point(data = summary, aes(x = Weighted_Var, y = Weighted_Output),
              color = "red", size = 2) +
-  #geom_point(data = frontier_labeled,
-           #  aes(x = variance, y = exp_mwhdollar),
-           #  color = "red4",
-           #  size = 2.5) +
+ #  geom_point(data = moments_plot,
+ #             aes(x = Variance, y = Return),
+ #             color = "red4",
+ #             size = 2.5) +
  # geom_label_repel(
-   # data = frontier_labeled,
-   # aes(x = variance, y = exp_mwhdollar, label = label_gamma),
-   # size = 3,
-   # color = "black",
-   # label.size = 0,
-   # box.padding = 0.4,
-   # point.padding = 0.25,
-   # min.segment.length = 0
-  # ) +
+ #   data = moments_plot,
+ #   aes(x = Variance, y = Return, label = gamma),
+ #   size = 3,
+ #   color = "black",
+ #   label.size = 0,
+ #   box.padding = 0.4,
+ #   point.padding = 0.25,
+ #   min.segment.length = 0
+ #  ) +
   geom_text_repel(
     data = summary,
     aes(x = Weighted_Var, y = Weighted_Output, label = Site),
@@ -759,8 +759,8 @@ ggplot() +
     color = "red"
   ) +
   labs(
-    x = expression("Variance (" * MW ~ "/" ~ "Hour x $ Millions" * ")"),
-    y = expression("Expected (" * MW ~ "/" ~ "Hour x $ Millions" * ")")
+    x = expression("Variance (" * MW ~ "/" ~ "Hour x $ Millions Spent" * ")"),
+    y = expression("Expected (" * MW ~ "/" ~ "Hour x $ Millions Spent" * ")")
   ) +
   theme_minimal(base_size = 12)
 
@@ -779,8 +779,8 @@ ggplot() +
     color = "lightpink4"
   ) +
   labs(
-    x = expression("Variance (" * MW ~ "/" ~ "Hour x $ Millions" * ")"),
-    y = expression("Expected (" * MW ~ "/" ~ "Hour x $ Millions" * ")")
+    x = expression("Variance (" * MW ~ "/" ~ "Hour x $ Millions Spent" * ")"),
+    y = expression("Expected (" * MW ~ "/" ~ "Hour x $ Millions Spent" * ")")
   ) +
   theme_minimal(base_size = 12)
 
@@ -998,8 +998,8 @@ ggplot() +
     color = "red"
   ) +
   labs(
-    x = expression("Variance (" * MW ~ "/" ~ "Hour x $ Millions" * ")"),
-    y = expression("Expected (" * MW ~ "/" ~ "Hour x $ Millions" * ")")
+    x = expression("Variance (" * MW ~ "/" ~ "Hour x $ Millions Spent" * ")"),
+    y = expression("Expected (" * MW ~ "/" ~ "Hour x $ Millions Spent" * ")")
   ) +
   theme_minimal(base_size = 12)
 
