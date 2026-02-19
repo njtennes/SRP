@@ -98,7 +98,7 @@ sites <- bx$sites
 meta  <- bx$meta
 
 #write.csv(X, file = "/Users/nicktennes/Desktop/FullOutputMatrix.csv", row.names = FALSE)
-
+#cost assumptions pulled from "CAPEXcostassumptions.csv" in box drive
 cost_per_MWh <- c(
   "Medicine Bow Wind" = 374.32,
   "Encino Wind"       = 265.66,
@@ -111,6 +111,8 @@ cost_per_MWh <- c(
   "St Johns Solar"    = 171.76,
   "Deming Solar"      = 184.39
 )
+
+#correlate costs to sties
 cost_per_MWh <- cost_per_MWh[sites]
 # ============================================
 # Derive HourOfDay, DayOfYear, Month
@@ -140,9 +142,11 @@ meta <- meta %>%
 # ============================================
 # Mean & covariance of CF 
 # ============================================
+
+# convert mw to kw
 X_MW <- X / 1000
 
-# Cost-adjusted output series: (MW) / ($/MWh)  ~  MWh per $
+# Cost-adjusted output series: MW / Capex Costs (Millions of $)
 X_econ <- sweep(X_MW, 2, cost_per_MWh, FUN = "/")
 
 SigmaMW <- cov(X_MW)
@@ -161,9 +165,9 @@ summary <- tibble(
 ) |>
   dplyr::arrange(dplyr::desc(Weighted_Output))
 
-con <- pipe("pbcopy", "w")
-write.table(summary, con, sep = "\t", col.names = NA)
-close(con)
+#con <- pipe("pbcopy", "w")
+#write.table(summary, con, sep = "\t", col.names = NA)
+#close(con)
 
 summary_table <- as.data.frame(X) |>
   pivot_longer(
@@ -180,11 +184,11 @@ summary_table <- as.data.frame(X) |>
     .groups = "drop"
   )
 
-summary_table
-
+#re-pull hour and year from the meta df (probably could have done this better)
 m <- meta$Month
 y <- meta$Year
 
+#assigned seasons, not used...
 season_vec <- dplyr::case_when(
   m %in% c(12, 1, 2) ~ "Winter",
   m %in% c(3, 4, 5)  ~ "Spring",
@@ -193,6 +197,7 @@ season_vec <- dplyr::case_when(
   TRUE               ~ NA_character_
 )
 
+#hourly month summaries
 summary_monthly <- as_tibble(X) |>
   mutate(
     Month = m,
@@ -295,6 +300,7 @@ site_colors <- c(
   setNames(wind_colors,  wind_sites)
 )
 
+# ribbon plot for monthly summaries of sites
 ggplot(summary_monthly,
        aes(x = Month, y = Mean_CF, color = Site)) +
   geom_point(size = 2, alpha = 0.9) +
@@ -311,8 +317,10 @@ ggplot(summary_monthly,
   ) +
   theme_minimal(base_size = 12)
 
+#assigned hour of day
 h <- meta$HourOfDay
 
+#hourly summary by technology
 hourly_tech <- as_tibble(X) |>
   mutate(Hour = h) |>
   pivot_longer(
@@ -337,6 +345,7 @@ hourly_tech <- as_tibble(X) |>
 hourly_tech <- hourly_tech %>%
   mutate(Mean_CF = Mean_CF * 100)
 
+#hourly tech just in the summer
 hourly_tech_summer <- as_tibble(X) |>
   mutate(
     Hour  = h,
@@ -410,13 +419,15 @@ ggplot(hourly_tech_summer, aes(y = Mean_CF, x = Hour, color = Site)) +
   ) +
   theme_minimal(base_size = 12)
 
-ggplot(hourly_tech, aes(x = Hour, y = Mean_CF, color = tech)) +
+ggplot(hourly_tech, aes(x = Hour, y = Mean_CF/100000, color = tech)) +
   geom_line(size = 1, alpha = 1) +
   scale_x_continuous(breaks = 0:23) +
   scale_color_manual(values = c("Solar" = "lightpink3", "Wind" = "#08306B")) +
   labs(x = "Hour of Day", y = "Expected Capacity Factor (%)", color = "Technology") +
   theme_minimal(base_size = 12)
 
+
+#Density functions. Didn't use....
 kingman <- as_tibble(X[, "Kingman Solar"])
 
 ggplot(data.frame(CF = kingman), aes(x = CF)) +
@@ -436,22 +447,6 @@ ggplot(data.frame(CF = kingman), aes(x = CF)) +
     y = "F(x)"
   ) +
   theme_minimal(base_size = 12)
-
-MB <- as_tibble(X[, "Medicine Bow Wind"])
-
-MBD <- MB %>%
-  mutate(hour = h)
-
-MBD <- MBD %>%
-  mutate(Day_ID = (row_number() - 1) %/% 24 + 1)
-
-MBD <- MBD %>%
-  group_by(Day_ID) %>%
-  summarize(Output= sum(value))
-
-MBD <- MBD %>%
-  mutate(Output= Output/100000)
-
 
 ggplot(MB, aes(x = value)) +
   geom_density(adjust = 1.2, na.rm = TRUE) +
@@ -545,10 +540,13 @@ weights_table <- tibble(Site = sites, Weight = round(sol0$w, 4))
 con <- pipe("pbcopy", "w")
 write.table(weights_table, con, sep = "\t", col.names = NA)
 close(con)
+
 #============
 # Discrete Gamma Vector
 #==============
-gamma_vec <- c(0.01, .75, 1.125, 3, 100)
+
+#change list of gammas as needed
+gamma_vec <- c(0.01, .75, 1.5, 3, 4.5, 100)
 
 sols <- map(gamma_vec, ~solve_markowitz(mu, Sigma, gamma = .x, solver = "OSQP"))
 
@@ -833,14 +831,14 @@ close(con)
 #============
 # Discrete Gamma Vector
 #==============
-gamma_vec <- c(0.01, .75, 1.125, 3, 100)
+gamma_rel_vec <- c(0.01, 0.75, 1.5, 3, 4.5, 100)
 
-sols_rel <- map(gamma_vec, ~solve_markowitz(mu_rel, Sigma_rel, gamma = .x, solver = "OSQP"))
+sols_rel <- map(gamma_rel_vec, ~solve_markowitz(mu_rel, Sigma_rel, gamma = .x, solver = "OSQP"))
 
 gname <- function(x) format(x, trim = TRUE, scientific = FALSE)
 
 moments_long_rel <- tibble(
-  gamma = gamma_vec,
+  gamma = gamma_rel_vec,
   `E`   = map_dbl(sols_rel, "exp_output"),
   Var   = map_dbl(sols_rel, "variance")
 ) |>
@@ -854,10 +852,10 @@ moments_tbl_rel <- moments_long_rel |>
                     `E` = "E[MWh/$]",   
     )
   ) |>
-  select(Moment, all_of(gname(gamma_vec)))
+  select(Moment, all_of(gname(gamma_rel_vec)))
 
 weights_long_rel <- map2_dfr(
-  sols_rel, gamma_vec,
+  sols_rel, gamma_rel_vec,
   ~tibble(gamma = .y, Site = sites, Weight = .x$w)
 ) %>%
   mutate(
@@ -873,7 +871,7 @@ weights_tbl_rel <- weights_long_rel |>
   pivot_wider(names_from = gamma, values_from = WeightPct) |>
   arrange(Site)
 # =================
-# stacked bar chart of weights
+# stacked bar chart of reliability hours weights
 # =================
 site_order <- c("Casa Grande Solar", "Deming Solar", "Kingman Solar",
                 "Encino Wind", "GC Junction Wind", "Medicine Bow Wind", "Silver City Wind")
@@ -936,7 +934,7 @@ ggplot(weights_long_rel_plot, aes(x = gamma, y = WeightPct, fill = Site)) +
   theme_minimal(base_size = 12)
 
 # ===================
-# Plot of discrete gammas
+# Reliability Hours plot of discrete gammas
 # ===================
 
 moments_plot_rel <- moments_tbl_rel |>
