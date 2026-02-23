@@ -736,22 +736,12 @@ ggplot() +
              size = 1.5, color = "darkblue", alpha = 0.7) +
   geom_point(data = summary, aes(x = Weighted_Var, y = Weighted_Output),
              color = "red", size = 2) +
- #  geom_point(data = moments_plot,
- #             aes(x = Variance, y = Return),
- #             color = "red4",
- #             size = 2.5) +
- # geom_label_repel(
- #   data = moments_plot,
- #   aes(x = Variance, y = Return, label = gamma),
- #   size = 3,
- #   color = "black",
- #   label.size = 0,
- #   box.padding = 0.4,
- #   point.padding = 0.25,
- #   min.segment.length = 0
- #  ) +
+  geom_text_repel(nudge_y = 0.005, nudge_x = -0.003,
+          data = moments_plot,
+          aes(x = Variance, y = Return, label = gamma),
+          size = 3) +
   geom_text_repel(
-    data = summary,
+    data = summary, nudge_y = -0.0075,
     aes(x = Weighted_Var, y = Weighted_Output, label = Site),
     size = 3,
     color = "red"
@@ -797,6 +787,7 @@ idx_rel <- which(
 )
 
 X_econ_rel <- X_econ[idx_rel, , drop = FALSE]
+X_MW_rel <- X_MW[idx_rel, , drop = FALSE]
 
 mu_rel    <- colMeans(X_econ_rel, na.rm = TRUE)
 Sigma_rel <- stats::cov(X_econ_rel, use = "pairwise.complete.obs")
@@ -808,8 +799,6 @@ summary_rel <- tibble(
   Mean_output = mu_output
 ) |>
   dplyr::arrange(dplyr::desc(Weighted_Output))
-
-summary_rel[1, 3] <- 0.030560370
 
 # Single-γ solution for reliability hours
 sol_rel <- solve_markowitz(mu_rel, Sigma_rel, gamma = gamma0)
@@ -989,15 +978,45 @@ ggplot() +
              size = 1.5, color = "darkblue", alpha = 0.7) +
   geom_point(data = summary_rel, aes(x = Weighted_Var, y = Weighted_Output),
              color = "red", size = 2) +
+  geom_text_repel(nudge_y = 0.006, nudge_x = -0.001,
+                  data = moments_plot_rel,
+                  aes(x = Variance, y = Return, label = gamma),
+                  size = 3) +
   geom_text_repel(
-    data = summary_rel,
+    data = summary_rel, nudge_y = -0.006,
     aes(x = Weighted_Var, y = Weighted_Output, label = Site),
     size = 3,
-    color = "red"
-  ) +
+    color = "red") + 
   labs(
     x = expression("Variance (" * MW ~ "/" ~ "Hour x $ Millions Spent" * ")"),
     y = expression("Expected (" * MW ~ "/" ~ "Hour x $ Millions Spent" * ")")
   ) +
   theme_minimal(base_size = 12)
 
+#=========================
+# CF of Cost Matrix
+#=========================
+
+mu_cf <- colMeans(X_MW, na.rm = TRUE)
+mu_cf_df <- tibble(Site = names(mu_cf), mu_cf = as.numeric(mu_cf))
+
+E_cf_by_gamma <- weights_long %>%
+  left_join(mu_cf_df, by = "Site") %>%
+  group_by(gamma) %>%
+  summarise(
+    E_CF = sum(Weight * mu_cf, na.rm = TRUE),
+    .groups = "drop")
+  
+mu_rel_cf <- colMeans(X_MW_rel, na.rm = TRUE)
+mu_rel_cf_df <- tibble(Site = names(mu_rel_cf), mu_cf = as.numeric(mu_rel_cf))
+
+#=========================
+# CF of Cost-Reliability Matrix
+#=========================
+
+E_cf_by_gamma_rel <- weights_long_rel %>%
+  left_join(mu_rel_cf_df, by = "Site") %>%
+  group_by(gamma) %>%
+  summarise(
+    E_CF = sum(Weight * mu_rel_cf, na.rm = TRUE),
+    .groups = "drop")

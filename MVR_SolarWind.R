@@ -306,7 +306,7 @@ close(con)
 #============
 # Gamma Vector
 #==============
-gamma_vec <- c(0.01, .75, 1.5, 3, 100)
+gamma_vec <- c(0.01, .75, 1.5, 3, 4.5, 100)
 
 sols <- map(gamma_vec, ~solve_markowitz(mu, Sigma, gamma = .x, solver = "OSQP"))
 
@@ -438,7 +438,7 @@ ggplot(moments_plot,
        aes(x = Variance,
            y = ECF)) +
   geom_point(size = 3, shape = 8) +
-  geom_line(size = .25, alpha = 5) +
+  geom_line(linewidth = .25, alpha = 5) +
   geom_text(
     aes(label = gamma),
     vjust = -0.8,
@@ -481,33 +481,20 @@ ggplot() +
   geom_point(data = frontier, aes(x = variance, y = exp_CF),
              size = 1.5, color = "#08306B", alpha = 0.7) +
   geom_point(data = summary, aes(x = Variance, y = Mean_CF),
-             color = "lightpink4", size = 2) +
+             color = "red3", size = 2) +
+  geom_text_repel(nudge_y = 1.1, nudge_x = -0.003,
+    data = moments_plot,
+    aes(x = Variance, y = ECF*100, label = gamma),
+    size = 3) +
   geom_text_repel(
     data = summary,
     aes(x = Variance, y = Mean_CF, label = Site),
     size = 3,
     color = "red"
   ) +
-  geom_point(data = gamma_points,
-             aes(x = variance, y = exp_CF),
-             color = "red4",
-             size = 2.5) +
-  geom_text_repel(
-    data = gamma_points,
-    aes(x = variance, y = exp_CF,
-        label = paste0("γ = ", gamma)),
-    size = 3.2,
-    color = "black",
-    nudge_y = 0.1,      # move labels slightly up
-    nudge_x = -0.002,    # move left/right if needed
-    box.padding = 0.4,
-    point.padding = 0.3,
-    segment.color = "grey50"
-  )+
   labs(
     x = "Variance of Capacity Factor",
     y = "Expected Capacity Factor (%)",  # change to (%) if you multiply Mean_CF by 100
-    title = "Cost-Neutral Efficient Frontier with Single-Site Portfolios"
   ) +
   theme_minimal(base_size = 12)
 
