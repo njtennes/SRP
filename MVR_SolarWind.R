@@ -23,6 +23,7 @@ site_files <- c(
   '/Users/nicktennes/Documents/SAM ERA5 Output 8760/St Johns Solar.csv',
   '/Users/nicktennes/Documents/SAM ERA5 Output 8760/Wilcox Solar.csv'
 )
+
 # ============================================
 # gamma (1st one for single optimization)
 # ============================================
