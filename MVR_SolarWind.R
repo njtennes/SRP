@@ -705,11 +705,10 @@ front_compare <- bind_rows(frontier_hour, frontier_day2)
 ggplot(front_compare, aes(x = variance, y = exp_CF, color = Granularity)) +
   geom_line(linewidth = 0.8) +
   geom_point(size = 1.2, alpha = 0.6) +
-  scale_color_manual(values = c("Daily" = "lightpink3", "Hourly" = "#08306B")) +
+  scale_color_manual(values = c("Daily" = "steelblue2", "Hourly" = "#08306B")) +
   labs(
-    x = "Variance of CF",
-    y = "Expected CF (%)",
-    title = "Efficient Frontier Comparison: Hourly vs Daily-Average CF"
+    x = "Variance of Capacity Factor",
+    y = "Expected Capacity Factor (%)"
   ) +
   theme_minimal(base_size = 12)
 
@@ -732,4 +731,16 @@ metrics_compare <- tibble(
   exp_CF   = c(sol0$exp_CF, sol0_day$exp_CF),
   variance = c(sol0$variance, sol0_day$variance)
 )
-print(metrics_compare)
+
+metrics_wide <- metrics_compare %>%
+  mutate(freq = recode(freq, "Daily mean" = "Daily_mean")) %>%  # optional: avoid spaces
+  pivot_longer(cols = c(exp_CF, variance), names_to = "metric", values_to = "value") %>%
+  pivot_wider(names_from = freq, values_from = value) %>%
+  mutate(
+    pct_change = (Hourly - Daily_mean) / Hourly * 100
+  ) %>%
+  mutate(
+    metric = recode(metric,
+                    exp_CF   = "Expected CF",
+                    variance = "Variance")
+  )
