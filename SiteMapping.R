@@ -6,10 +6,10 @@ library(maps)
 sites <- data.frame(
   Site = c("Willcox, AZ", "Deming, NM", "Kingman, AZ",
            "Casa Grande, AZ", "St. Johns, AZ", "Grand Canyon Junction, AZ", 
-           "Medicine Bow, WY", "Encino, NM", "Silver City, NM"),
-  Lat  = c(32.2, 32.4, 35.2, 32.87, 34.57, 35.65, 41.9, 34.65, 32.74),
-  Lon  = c(-109.8, -108.7, -114.15, -111.74, -109.36, -112.14, -106.2, -105.5, -108.28),
-  Type = c("Solar", "Solar", "Solar", "Solar", "Solar", "Both", "Wind", "Wind", "Wind")
+           "Medicine Bow, WY", "Encino, NM", "Silver City, NM", "SRP"),
+  Lat  = c(32.2, 32.4, 35.2, 32.87, 34.57, 35.65, 41.9, 34.65, 32.74, 33.41),
+  Lon  = c(-109.8, -108.7, -114.15, -111.74, -109.36, -112.14, -106.2, -105.5, -108.28, -111.94),
+  Type = c("Solar", "Solar", "Solar", "Solar", "Solar", "Both", "Wind", "Wind", "Wind", "SRP")
 )
 
 write.csv(sites, "coordinates.csv", row.names = FALSE)
@@ -32,7 +32,7 @@ p <- ggplot() +
   ) +
   geom_point(
     data = sites,
-    aes(x = Lon, y = Lat, color = Type),  # map Type -> color
+    aes(x = Lon, y = Lat, color = Type),  
     size = 2.8
   ) +
   scale_color_manual(
