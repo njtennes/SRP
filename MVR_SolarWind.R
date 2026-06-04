@@ -236,20 +236,6 @@ WindSolar <- X[, c("Medicine Bow Wind", "Encino Wind", "Silver City Wind",
                    "Casa Grande Solar", "Willcox Solar", "St Johns Solar", 
                    "Deming Solar")]
 
-#cor_WindSolar <- cor(WindSolar, use = "pairwise.complete.obs")
-#round(cor_WindSolar, 3)
-
-#con <- pipe("pbcopy", "w")
-#write.table(round(cor_X, 3), con, sep = "\t", col.names = NA)
-#close(con)
-
-#wind_only <- X[, c("Encino Wind", "Medicine Bow Wind", "Silver City Wind", "GC Junction Wind")]
-#cor_wind <- cor(wind_only, use = "pairwise.complete.obs")
-#round(cor_wind, 3)
-
-#GCJ_only <- X[, c("GC Junction Solar", "GC Junction Wind")]
-#cor_GCJ <- cor(GCJ_only, use = "pairwise.complete.obs")
-#round(cor_GCJ, 3)
 
 WindSolar <- X[, c("Medicine Bow Wind", "Encino Wind", "Willcox Solar", "Kingman Solar")]
 cor_WindSolar <- cor(WindSolar, use = "pairwise.complete.obs")
@@ -266,22 +252,25 @@ close(con)
 solve_markowitz <- function(mu, Sigma, gamma = gamma0, lb = NULL, ub = NULL, solver = "OSQP") {
   n <- length(mu)
   w <- CVXR::Variable(n)
+  
   obj <- t(mu) %*% w - gamma * CVXR::quad_form(w, Sigma)
   cons <- list(w >= 0, sum(w) == 1)
   
   prob <- CVXR::Problem(CVXR::Maximize(obj), cons)
-  res  <- CVXR::solve(prob, solver = solver)
-  #im telling CVXR To maximize my objective function (obj) 
-  #subject to consraints (cons)
-  #res = solver executes optimization
+  res  <- CVXR::psolve(prob, solver = solver)
+  # telling CVXR to maximize the objective function (obj)
+  # subject to the constraints (cons)
+  # res now stores the optimal objective value, not a result object
   
-  wv <- as.numeric(res$getValue(w))
+  wv <- as.numeric(CVXR::value(w))
+  
   list(
-    status   = res$status,
+    status   = CVXR::status(prob),
     w        = wv,
     exp_CF   = sum(mu * wv),
     variance = as.numeric(t(wv) %*% Sigma %*% wv),
-    gamma    = gamma
+    gamma    = gamma,
+    opt_val  = res
   )
 }
 
@@ -696,7 +685,7 @@ frontier_day <- frontier_day %>%
 cat("\n--- Efficient frontier (DAILY, head) ---\n")
 print(head(frontier_day, 20))
 
-# Add labels to your already-computed hourly frontier
+# Add labels to hourly frontier
 frontier_hour <- frontier %>% mutate(Granularity = "Hourly")
 frontier_day2  <- frontier_day %>% select(gamma, exp_CF, variance) %>% mutate(Granularity = "Daily")
 
@@ -725,7 +714,7 @@ w_compare <- tibble(
 cat("\n--- Weight comparison at gamma0 ---\n")
 print(w_compare)
 
-# Compare objective components at gamma0
+# Compare at gamma0
 metrics_compare <- tibble(
   freq     = c("Hourly", "Daily mean"),
   exp_CF   = c(sol0$exp_CF, sol0_day$exp_CF),
@@ -744,3 +733,94 @@ metrics_wide <- metrics_compare %>%
                     exp_CF   = "Expected CF",
                     variance = "Variance")
   )
+
+# ============================================
+# Monthly aggregation (monthly mean CF)
+# ============================================
+
+meta <- meta %>%
+  mutate(MonthID = paste0(Year, "-", sprintf("%02d", Month)))
+
+X_month <- apply(X, 2, function(v) tapply(v, meta$MonthID, mean, na.rm = TRUE))
+colnames(X_month) <- sites
+rownames(X_month) <- sort(unique(meta$MonthID))
+
+meta_month <- meta %>%
+  distinct(MonthID, Year, Month) %>%
+  arrange(MonthID)
+
+# Mean & covariance
+mu_month    <- colMeans(X_month, na.rm = TRUE)
+Sigma_month <- stats::cov(X_month, use = "pairwise.complete.obs")
+
+# Single-γ monthly solution
+sol0_month <- solve_markowitz(mu_month, Sigma_month, gamma = gamma0)
+
+cat("\n--- Single-γ MONTHLY solution ---\n")
+print(
+  tibble(Site = sites, Weight = round(sol0_month$w, 4)) |>
+    arrange(desc(Weight))
+)
+
+cat(sprintf("γ=%g | E[CF]_month=%.4f | Var_month=%.6f\n",
+            sol0_month$gamma, sol0_month$exp_CF, sol0_month$variance))
+
+# Efficient frontier monthly
+front_month <- lapply(gamma_grid, function(g) {
+  solve_markowitz(mu_month, Sigma_month, gamma = g)
+})
+
+frontier_month <- tibble(
+  gamma    = sapply(front_month, `[[`, "gamma"),
+  exp_CF   = sapply(front_month, `[[`, "exp_CF"),
+  variance = sapply(front_month, `[[`, "variance"),
+  status   = sapply(front_month, `[[`, "status")
+) |>
+  filter(status == "optimal") |>
+  arrange(variance) |>
+  mutate(exp_CF = exp_CF * 100)
+
+frontier_hour <- frontier %>%
+  mutate(Granularity = "Hourly")
+
+frontier_day2 <- frontier_day %>%
+  select(gamma, exp_CF, variance) %>%
+  mutate(Granularity = "Daily")
+
+frontier_month2 <- frontier_month %>%
+  select(gamma, exp_CF, variance) %>%
+  mutate(Granularity = "Monthly")
+
+front_compare <- bind_rows(
+  frontier_hour,
+  frontier_day2,
+  frontier_month2
+)
+
+ggplot(front_compare, aes(x = variance, y = exp_CF, color = Granularity)) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 1.2, alpha = 0.6) +
+  scale_color_manual(values = c(
+    "Hourly" = "yellow3",
+    "Daily" = "darkgreen",
+    "Monthly" = "lightgreen"
+  )) +
+  labs(
+    x = "Variance of Capacity Factor",
+    y = "Expected Capacity Factor (%)",
+    color = "Aggregation"
+  ) +
+  theme_minimal(base_size = 12)
+
+w_compare <- tibble(
+  Site    = sites,
+  Hourly  = sol0$w,
+  Daily   = sol0_day$w,
+  Monthly = sol0_month$w,
+  Diff_Daily_Hourly   = sol0_day$w - sol0$w,
+  Diff_Monthly_Hourly = sol0_month$w - sol0$w
+) |>
+  mutate(across(where(is.numeric), ~round(.x, 4))) |>
+  arrange(desc(abs(Diff_Monthly_Hourly)))
+
+print(w_compare)

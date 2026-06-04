@@ -1,3 +1,8 @@
+#This is the MV cost-weighted optimization, it is an extension of the 
+#MVR_SolarWind.R capacity factor optimization.
+#The code is functionally very similar, but the X (hourly output) matrix
+#is scaled by estimated costs, which are manually input into the code
+
 # ============================================
 # Libraries
 # ============================================
@@ -11,8 +16,10 @@ library(ggrepel)
 library(CVXR)
 library(kableExtra)
 
-#=================================
-
+# =================================
+# import output files simulated in SAM
+# for future sites, ensure the names of the files are Location + Tech
+# =================================
 site_files <- c(
   '/Users/nicktennes/Documents/SAM ERA5 Output 8760/GC Junction Wind.csv',
   '/Users/nicktennes/Documents/SAM ERA5 Output 8760/Encino Wind.csv',
@@ -26,16 +33,25 @@ site_files <- c(
   '/Users/nicktennes/Documents/SAM ERA5 Output 8760/Wilcox Solar.csv'
 )
 # ============================================
-# gamma (1st one for single optimization)
+# Risk aversion parameter
 # ============================================
+
+#single risk aversion value
+#I used .01, 0.75, 1.5, 3, 4.5, and 100
 gamma0     <- 2
+
+#log scaled grid of gamma values just to make a big range 
+#only used to trace the frontier and nitpick performances of each gamma
 gamma_grid <- 10^seq(-10, 3, length.out = 50)
 
+#here I am just saying that the names of the sites can be drawn from the files
 site_names <- basename(site_files) |> tools::file_path_sans_ext()
 
-#bahahaha
+# i mispelled Willcox in all my SAM files bahahaha
 site_names[site_names == "Wilcox Solar"] <- "Willcox Solar"
 
+# "meta" just means its storing data about the sites
+# here, i am storing the sitename, and if its solar or wind
 site_meta <- tibble(
   file     = site_files,
   sitename = site_names
@@ -47,6 +63,9 @@ site_meta <- tibble(
       TRUE ~ "Unknown"
     ))
 
+#Here, I am making a big, ugly long dataset
+#The transformation is needed to construct the output matrix
+# but you will not have to interact with it afterwards:) 
 read_site_long_output <- function(path, sitename) {
   
   df <- readr::read_csv(path, show_col_types = FALSE)
@@ -99,6 +118,7 @@ meta  <- bx$meta
 
 #write.csv(X, file = "/Users/nicktennes/Desktop/FullOutputMatrix.csv", row.names = FALSE)
 #cost assumptions pulled from "CAPEXcostassumptions.csv" in box drive
+#this is input manually!! 
 cost_per_MWh <- c(
   "Medicine Bow Wind" = 374.32,
   "Encino Wind"       = 265.66,
@@ -143,7 +163,7 @@ meta <- meta %>%
 # Mean & covariance of CF 
 # ============================================
 
-# convert mw to kw
+# convert kw to mw
 X_MW <- X / 1000
 
 # Cost-adjusted output series: MW / Capex Costs (Millions of $)
@@ -153,6 +173,13 @@ SigmaMW <- cov(X_MW)
 Sigma <- cov(X_econ)
 mu    <- colMeans(X_econ)
 mu_output <- colMeans(X_MW)
+
+# --------------------------------
+# the following chunk of text is for generating:
+  # site summary stats, data visualizations, correlation matrices, etc.
+# You can skip to the section Markowitz Solver (line ~515),
+# and the code will still run the MV optimization
+# --------------------------------  
 
 # ============================================
 #Site Summary Table
@@ -237,7 +264,7 @@ summary_monthly <- as_tibble(X) |>
     values_to = "kW"
   ) |>
   mutate(
-    CF = kW / nameplate_kW   # convert to CF once, cleanly
+    CF = kW / nameplate_kW  
   ) |>
   group_by(Year, Month, Site) |>
   summarise(
@@ -487,44 +514,40 @@ con <- pipe("pbcopy", "w")
 write.table(round(cor_WindSolar, 3), con, sep = "\t", col.names = NA)
 close(con)
 
-#wind_only <- X[, c("Encino Wind", "Medicine Bow Wind", "Silver City Wind", "GC Junction Wind")]
-#cor_wind <- cor(wind_only, use = "pairwise.complete.obs")
-#round(cor_wind, 3)
-
-#GCJ_only <- X[, c("GC Junction Solar", "GC Junction Wind")]
-#cor_GCJ <- cor(GCJ_only, use = "pairwise.complete.obs")
-#round(cor_GCJ, 3)
-
-#WindSolar <- X[, c("Medicine Bow Wind", "Encino Wind", "Wilcox Solar", "Kingman Solar")]
-#cor_WindSolar <- cor(WindSolar, use = "pairwise.complete.obs")
-#round(cor_WindSolar, 3)
-
 # ============================================
 # Markowitz solver
 # max  μᵀw - γ wᵀΣw  s.t. w >= 0, Σw = 1
 # ============================================
-solve_markowitz <- function(mu, Sigma, gamma = gamma0, solver = "OSQP") {
+solve_markowitz <- function(mu, Sigma, gamma = gamma0, lb = NULL, ub = NULL, solver = "OSQP") {
   n <- length(mu)
   w <- CVXR::Variable(n)
+  
   obj <- t(mu) %*% w - gamma * CVXR::quad_form(w, Sigma)
   cons <- list(w >= 0, sum(w) == 1)
   
   prob <- CVXR::Problem(CVXR::Maximize(obj), cons)
-  res  <- CVXR::solve(prob, solver = solver)
+  res  <- CVXR::psolve(prob, solver = solver)
+  # telling CVXR to maximize the objective function (obj)
+  # subject to the constraints (cons)
+  # res now stores the optimal objective value, not a result object
   
-  wv <- as.numeric(res$getValue(w))
+  wv <- as.numeric(CVXR::value(w))
+  
   list(
-    status     = res$status,
-    w          = wv,
-    exp_output = sum(mu * wv),
-    variance   = as.numeric(t(wv) %*% Sigma %*% wv),
-    gamma      = gamma
+    status   = CVXR::status(prob),
+    w        = wv,
+    exp_CF   = sum(mu * wv),
+    variance = as.numeric(t(wv) %*% Sigma %*% wv),
+    gamma    = gamma,
+    opt_val  = res
   )
 }
 
 # ============================================
 # Single-γ solution
 # ============================================
+
+#You can set the gamma0 earlier, but you can also change it here
 gamma0     <- 7.5
 
 sol0 <- solve_markowitz(mu, Sigma, gamma = gamma0)
@@ -543,6 +566,9 @@ close(con)
 
 #============
 # Discrete Gamma Vector
+# Originally, i was running the single-gamma optimization 1-by-1,
+# but i made this so you can list all the discrete gammas you want, 
+# and run it all at once
 #==============
 
 #change list of gammas as needed
@@ -569,6 +595,7 @@ moments_tbl <- moments_long |>
   ) |>
   select(Moment, all_of(gname(gamma_vec)))
 
+# not sure why, but R went crazy on the decimals when labelling gamme...
 moments_tbl <- moments_tbl %>%
   rename("100" = "100.000")
 
@@ -597,6 +624,7 @@ weights_tbl <- weights_long |>
   select(Site, gamma, WeightPct) |>
   pivot_wider(names_from = gamma, values_from = WeightPct) |>
   arrange(Site)
+
 # =================
 # stacked bar chart of weights
 # =================
@@ -719,16 +747,6 @@ frontier_labeled <- frontier %>%
                                paste0("γ=", round(gamma, 2)),
                                NA_character_))
 
-##MANUALL!!!
-#frontier_labeled <- tibble::tibble(
-#  gamma        = c(0.01, 0.75, 1.5, 3, 100),
-#  variance     = c(1.78, 1.49, 0.48, 0.125, 0.105),
-#  exp_mwhdollar = c(1.15, 1.123, 0.972, 0.75, 0.65)
-#) |>
-#  dplyr::mutate(
-#   label_gamma = paste0("\u03B3 = ", gamma)  # γ =
-#  )
-
 ggplot() +
   geom_line(data = frontier, aes(x = variance, y = exp_mwhdollar),
             linewidth = 0.7, color = "darkblue") +
@@ -775,6 +793,9 @@ ggplot() +
 ###### ============================================
 # Reliability-hour subset
 # Currently: Jun-Sep, 8-10pm
+# this is where you can filter for any months or hours you want!
+# just comment in and out the months or hourofday lines
+# you could also for filter years for sensitivity checks
 # ============================================
 
 idx_rel <- which(
