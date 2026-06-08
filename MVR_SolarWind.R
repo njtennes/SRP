@@ -159,6 +159,10 @@ meta <- meta %>%
 mu    <- colMeans(X)
 Sigma <- stats::cov(X)
 
+# SUMMARY TABLE & CORRELATION MATRICES
+# YOU CAN SKIP TO MARKOWITZ SOLVER SECTION
+# *IF YOU ALREADY HAVE THOSE*
+# ** BUT(!!!!) IF YOU WANT TO MAKE FIGURES, YOU NEED THESE **
 # ============================================
 #Site Summary Table
 # ============================================
@@ -490,6 +494,7 @@ ggplot() +
 
 # ============================================
 # July–August subset
+# SKIP TO NEXT SECTION FOR BETTER CUSTOMIZABILITY
 # ============================================
 idx_JA <- which(meta$Month %in% c(7, 8))
 X_JA   <- X[idx_JA, , drop = FALSE]
@@ -560,7 +565,7 @@ close(con)
 # ============================================
 
 idx_rel <- which(
-  # Summer late afternoon peak: May–Sep, 3–7pm
+  # Summer late afternoon peak: June–Sep, 4–9pm
   (meta$Month %in% 6:9  & meta$HourOfDay %in% 16:21) #|
     # Winter morning peak: Dec–Mar, 6–9am
    # (meta$Month %in% c(12, 1, 2, 3) & meta$HourOfDay %in% 6:9) |
@@ -627,9 +632,9 @@ cor_X_rel <- cor(X_rel, use = "pairwise.complete.obs")
 print(round(cor_X_rel, 3))
 
 
-#######
-#Daily Aggregates
-#######
+#~#~#~#~#~#~#~#~#~#~#~#~#~#~#
+#TEMPORAL AGGREGATIONS
+#~#~#~#~#~#~#~#~#~#~#~#~#~#~# <- these look like transmission lines :D
 
 # ============================================
 #Daily aggregation (daily mean CF)
@@ -735,7 +740,7 @@ metrics_wide <- metrics_compare %>%
   )
 
 # ============================================
-# Monthly aggregation (monthly mean CF)
+# Monthly aggregation
 # ============================================
 
 meta <- meta %>%
@@ -824,3 +829,158 @@ w_compare <- tibble(
   arrange(desc(abs(Diff_Monthly_Hourly)))
 
 print(w_compare)
+
+# ============================================
+# Weekly aggregation 
+# ============================================
+meta <- meta %>%
+  mutate(
+    Week = ceiling(DayOfYear / 7),
+    WeekID = paste0(Year, "-W", sprintf("%02d", Week))
+  )
+
+X_week <- apply(X, 2, function(v) tapply(v, meta$WeekID, mean, na.rm = TRUE))
+colnames(X_week) <- sites
+rownames(X_week) <- sort(unique(meta$WeekID))
+
+meta_week <- meta %>%
+  distinct(WeekID, Year, Week) %>%
+  arrange(WeekID)
+
+mu_week    <- colMeans(X_week, na.rm = TRUE)
+Sigma_week <- stats::cov(X_week, use = "pairwise.complete.obs")
+
+sol0_week <- solve_markowitz(mu_week, Sigma_week, gamma = gamma0)
+
+cat("\n--- Single-γ WEEKLY solution ---\n")
+print(
+  tibble(Site = sites, Weight = round(sol0_week$w, 4)) |>
+    arrange(desc(Weight))
+)
+
+cat(sprintf("γ=%g | E[CF]_week=%.4f | Var_week=%.6f\n",
+            sol0_week$gamma, sol0_week$exp_CF, sol0_week$variance))
+
+front_week <- lapply(gamma_grid, function(g) {
+  solve_markowitz(mu_week, Sigma_week, gamma = g)
+})
+
+frontier_week <- tibble(
+  gamma    = sapply(front_week, `[[`, "gamma"),
+  exp_CF   = sapply(front_week, `[[`, "exp_CF"),
+  variance = sapply(front_week, `[[`, "variance"),
+  status   = sapply(front_week, `[[`, "status")
+) |>
+  filter(status == "optimal") |>
+  arrange(variance) |>
+  mutate(exp_CF = exp_CF * 100)
+
+#############
+# Compare frontiers of ALL granularities
+# hour, day, week, month
+#############
+
+frontier_hour <- frontier %>%
+  mutate(Granularity = "Hourly")
+
+frontier_day2 <- frontier_day %>%
+  select(gamma, exp_CF, variance) %>%
+  mutate(Granularity = "Daily")
+
+frontier_week2 <- frontier_week %>%
+  select(gamma, exp_CF, variance) %>%
+  mutate(Granularity = "Weekly")
+
+frontier_month2 <- frontier_month %>%
+  select(gamma, exp_CF, variance) %>%
+  mutate(Granularity = "Monthly")
+
+front_compare <- bind_rows(
+  frontier_hour,
+  frontier_day2,
+  frontier_week2,
+  frontier_month2
+)
+
+front_compare <- front_compare %>%
+  mutate(
+    Granularity = factor(
+      Granularity,
+      levels = c("Hourly", "Daily", "Weekly", "Monthly")
+    )
+  )
+
+ggplot(front_compare, aes(x = variance, y = exp_CF, color = Granularity)) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 1.2, alpha = 0.6) +
+  scale_color_manual(values = c(
+    "Hourly" = "darkred",
+    "Daily" = "salmon",
+    "Weekly" = "lightblue3",
+    "Monthly" = "blue4"
+  )) +
+  labs(
+    x = "Variance of Capacity Factor",
+    y = "Expected Capacity Factor (%)",
+    color = "Aggregation"
+  ) +
+  theme_minimal(base_size = 12)
+
+#########
+# Compare Weights of ALL granularities
+# hour, day, week, month
+#########
+w_compare <- tibble(
+  Site    = sites,
+  Hourly  = sol0$w,
+  Daily   = sol0_day$w,
+  Weekly  = sol0_week$w,
+  Monthly = sol0_month$w,
+  Diff_Daily_Hourly   = sol0_day$w - sol0$w,
+  Diff_Weekly_Hourly  = sol0_week$w - sol0$w,
+  Diff_Monthly_Hourly = sol0_month$w - sol0$w
+) |>
+  mutate(across(where(is.numeric), ~round(.x, 4))) |>
+  arrange(desc(abs(Diff_Monthly_Hourly)))
+
+print(w_compare)
+# =================
+# Semi Variance
+# =================
+gamma0 = 3
+
+solve_semivar <- function(mu, X, gamma = gamma0, solver = "OSQP") {
+  n <- length(mu)
+  Tn <- nrow(X)
+  w <- CVXR::Variable(n)
+  
+  port_cf <- X %*% w
+  port_mean <- t(mu) %*% w
+  
+  downside <- CVXR::pos(port_mean - port_cf)
+  semivar <- CVXR::sum_squares(downside) / Tn
+  
+  obj <- port_mean - gamma * semivar
+  cons <- list(w >= 0, sum(w) == 1)
+  
+  prob <- CVXR::Problem(CVXR::Maximize(obj), cons)
+  res <- CVXR::psolve(prob, solver = solver)
+  
+  wv <- as.numeric(CVXR::value(w))
+  port_cf_val <- as.numeric(X %*% wv)
+  port_mean_val <- sum(mu * wv)
+  
+  list(
+    status = CVXR::status(prob),
+    w = wv,
+    exp_CF = port_mean_val,
+    semivariance = mean(pmax(port_mean_val - port_cf_val, 0)^2),
+    gamma = gamma,
+    opt_val = res
+  )
+}
+
+sol0_semivar <- solve_semivar(mu, X, gamma = 3)
+
+tibble(Site = sites, Weight = round(sol0_semivar$w, 4)) |>
+  arrange(desc(Weight))
